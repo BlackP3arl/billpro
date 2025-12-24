@@ -1,0 +1,184 @@
+import { query } from '../db/client';
+import {
+  ServiceAccount,
+  ServiceAccountWithStats,
+  CreateServiceAccountInput,
+  UpdateServiceAccountInput,
+} from '../types/account';
+
+/**
+ * Get all service accounts
+ */
+export async function getAllAccounts(): Promise<ServiceAccount[]> {
+  const result = await query<ServiceAccount>(
+    'SELECT * FROM service_accounts ORDER BY account_name ASC'
+  );
+  return result.rows;
+}
+
+/**
+ * Get all active service accounts
+ */
+export async function getActiveAccounts(): Promise<ServiceAccount[]> {
+  const result = await query<ServiceAccount>(
+    'SELECT * FROM service_accounts WHERE is_active = true ORDER BY account_name ASC'
+  );
+  return result.rows;
+}
+
+/**
+ * Get account by ID
+ */
+export async function getAccountById(id: string): Promise<ServiceAccount | null> {
+  const result = await query<ServiceAccount>(
+    'SELECT * FROM service_accounts WHERE id = $1',
+    [id]
+  );
+  return result.rows[0] || null;
+}
+
+/**
+ * Get account by account number
+ */
+export async function getAccountByNumber(
+  accountNumber: string
+): Promise<ServiceAccount | null> {
+  const result = await query<ServiceAccount>(
+    'SELECT * FROM service_accounts WHERE account_number = $1',
+    [accountNumber]
+  );
+  return result.rows[0] || null;
+}
+
+/**
+ * Get accounts with statistics
+ */
+export async function getAccountsWithStats(): Promise<ServiceAccountWithStats[]> {
+  const result = await query<ServiceAccountWithStats>(
+    'SELECT * FROM v_account_stats ORDER BY account_name ASC'
+  );
+  return result.rows;
+}
+
+/**
+ * Create a new service account
+ */
+export async function createAccount(
+  input: CreateServiceAccountInput
+): Promise<ServiceAccount> {
+  const { account_number, account_name, provider = 'Dhiraagu', description } = input;
+
+  // Check if account already exists
+  const existing = await getAccountByNumber(account_number);
+  if (existing) {
+    throw new Error(`Account with number ${account_number} already exists`);
+  }
+
+  const result = await query<ServiceAccount>(
+    `INSERT INTO service_accounts (account_number, account_name, provider, description)
+     VALUES ($1, $2, $3, $4)
+     RETURNING *`,
+    [account_number, account_name, provider, description || null]
+  );
+
+  return result.rows[0];
+}
+
+/**
+ * Update a service account
+ */
+export async function updateAccount(
+  id: string,
+  input: UpdateServiceAccountInput
+): Promise<ServiceAccount> {
+  const fields: string[] = [];
+  const values: any[] = [];
+  let paramCount = 1;
+
+  if (input.account_name !== undefined) {
+    fields.push(`account_name = $${paramCount++}`);
+    values.push(input.account_name);
+  }
+
+  if (input.provider !== undefined) {
+    fields.push(`provider = $${paramCount++}`);
+    values.push(input.provider);
+  }
+
+  if (input.description !== undefined) {
+    fields.push(`description = $${paramCount++}`);
+    values.push(input.description);
+  }
+
+  if (input.is_active !== undefined) {
+    fields.push(`is_active = $${paramCount++}`);
+    values.push(input.is_active);
+  }
+
+  if (fields.length === 0) {
+    throw new Error('No fields to update');
+  }
+
+  values.push(id);
+
+  const result = await query<ServiceAccount>(
+    `UPDATE service_accounts
+     SET ${fields.join(', ')}
+     WHERE id = $${paramCount}
+     RETURNING *`,
+    values
+  );
+
+  if (result.rows.length === 0) {
+    throw new Error(`Account with ID ${id} not found`);
+  }
+
+  return result.rows[0];
+}
+
+/**
+ * Delete a service account
+ */
+export async function deleteAccount(id: string): Promise<void> {
+  await query('DELETE FROM service_accounts WHERE id = $1', [id]);
+}
+
+/**
+ * Check if account number exists
+ */
+export async function accountExists(accountNumber: string): Promise<boolean> {
+  const result = await query(
+    'SELECT COUNT(*) as count FROM service_accounts WHERE account_number = $1',
+    [accountNumber]
+  );
+  return parseInt(result.rows[0].count) > 0;
+}
+
+/**
+ * Auto-register account if it doesn't exist
+ * Creates account with basic info, allowing manual update later
+ */
+export async function autoRegisterAccount(
+  accountNumber: string,
+  provider: string = 'Dhiraagu'
+): Promise<ServiceAccount> {
+  // Check if account already exists
+  const existing = await getAccountByNumber(accountNumber);
+  if (existing) {
+    return existing;
+  }
+
+  // Create account with auto-generated name
+  const accountName = `Auto-registered ${accountNumber}`;
+  const description = 'Automatically registered during bill processing. Please update account details.';
+
+  const result = await query<ServiceAccount>(
+    `INSERT INTO service_accounts (account_number, account_name, provider, description)
+     VALUES ($1, $2, $3, $4)
+     RETURNING *`,
+    [accountNumber, accountName, provider, description]
+  );
+
+  console.log(`Auto-registered new account: ${accountNumber}`);
+  return result.rows[0];
+}
