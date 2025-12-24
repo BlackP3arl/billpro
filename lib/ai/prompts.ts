@@ -59,3 +59,14 @@ Return JSON:
   "warnings": ["array of warnings if any"],
   "confidence": number (0-100)
 }`;
+
+export const QUICK_SCAN_PROMPT = `Analyze ONLY the first page of this bill and extract just the invoice number and account number.
+
+Return ONLY valid JSON - no markdown, no explanations:
+{
+  "invoiceNumber": "string - bill invoice number",
+  "accountNumber": "string - account/service number",
+  "confidence": number (0-100, your confidence in the extraction)
+}
+
+Focus only on finding these two fields. Ignore all other information.`;

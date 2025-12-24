@@ -51,11 +51,44 @@ export async function getAccountByNumber(
 }
 
 /**
- * Get accounts with statistics
+ * Get accounts with statistics including monthly totals
  */
 export async function getAccountsWithStats(): Promise<ServiceAccountWithStats[]> {
   const result = await query<ServiceAccountWithStats>(
-    'SELECT * FROM v_account_stats ORDER BY account_name ASC'
+    `SELECT 
+      sa.id,
+      sa.account_number,
+      sa.account_name,
+      sa.provider,
+      sa.description,
+      sa.is_active,
+      sa.created_at,
+      sa.updated_at,
+      COUNT(b.id) as total_bills,
+      SUM(b.total_due) as total_spending,
+      AVG(b.total_due) as avg_bill_amount,
+      MAX(b.bill_date) as latest_bill_date,
+      (SELECT COUNT(*) FROM alerts WHERE service_account_id = sa.id AND status = 'active') as active_alerts,
+      -- Current month total (bills with billing_period_start in current month)
+      COALESCE((
+        SELECT SUM(b2.total_due)
+        FROM bills b2
+        WHERE b2.service_account_id = sa.id
+        AND DATE_TRUNC('month', b2.billing_period_start) = DATE_TRUNC('month', CURRENT_DATE)
+        AND b2.processing_status = 'completed'
+      ), 0) as current_month_total,
+      -- Previous month total (bills with billing_period_start in previous month)
+      COALESCE((
+        SELECT SUM(b3.total_due)
+        FROM bills b3
+        WHERE b3.service_account_id = sa.id
+        AND DATE_TRUNC('month', b3.billing_period_start) = DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+        AND b3.processing_status = 'completed'
+      ), 0) as previous_month_total
+    FROM service_accounts sa
+    LEFT JOIN bills b ON sa.id = b.service_account_id AND b.processing_status = 'completed'
+    GROUP BY sa.id, sa.account_number, sa.account_name, sa.provider, sa.description, sa.is_active, sa.created_at, sa.updated_at
+    ORDER BY sa.account_name ASC`
   );
   return result.rows;
 }

@@ -15,6 +15,8 @@ export interface ServiceAccountWithStats extends ServiceAccount {
   avg_bill_amount: number;
   latest_bill_date: Date | null;
   active_alerts: number;
+  current_month_total?: number;
+  previous_month_total?: number;
 }
 
 export interface CreateServiceAccountInput {

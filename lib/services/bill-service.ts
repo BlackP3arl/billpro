@@ -320,6 +320,106 @@ export async function invoiceExists(invoiceNumber: string): Promise<boolean> {
 }
 
 /**
+ * Check if a file with the same name already exists
+ */
+export async function fileExists(fileName: string): Promise<boolean> {
+  const result = await query(
+    'SELECT COUNT(*) as count FROM bills WHERE file_name = $1',
+    [fileName]
+  );
+  return parseInt(result.rows[0].count) > 0;
+}
+
+/**
+ * Get bill by file name
+ */
+export async function getBillByFileName(fileName: string): Promise<Bill | null> {
+  const result = await query<Bill>(
+    'SELECT * FROM bills WHERE file_name = $1 LIMIT 1',
+    [fileName]
+  );
+  return result.rows[0] || null;
+}
+
+/**
+ * Check if an account already has a bill for the same billing period
+ */
+export async function billingPeriodExists(
+  accountId: string,
+  billingPeriodStart: Date,
+  billingPeriodEnd: Date
+): Promise<Bill | null> {
+  const result = await query<Bill>(
+    `SELECT * FROM bills
+     WHERE service_account_id = $1
+     AND billing_period_start = $2
+     AND billing_period_end = $3
+     AND processing_status = 'completed'
+     LIMIT 1`,
+    [accountId, billingPeriodStart, billingPeriodEnd]
+  );
+  return result.rows[0] || null;
+}
+
+/**
+ * Check for duplicate bill before processing
+ */
+export async function checkForDuplicates(
+  invoiceNumber: string,
+  accountId: string | null,
+  billingPeriodStart: Date,
+  billingPeriodEnd: Date,
+  fileName?: string
+): Promise<{
+  isDuplicate: boolean;
+  reason: 'invoice' | 'billing_period' | 'file' | null;
+  existingBill?: Bill;
+}> {
+  // Check for duplicate invoice number
+  const existingInvoice = await getBillByInvoiceNumber(invoiceNumber);
+  if (existingInvoice) {
+    return {
+      isDuplicate: true,
+      reason: 'invoice',
+      existingBill: existingInvoice,
+    };
+  }
+
+  // Check for duplicate file name
+  if (fileName) {
+    const existingFileBill = await getBillByFileName(fileName);
+    if (existingFileBill) {
+      return {
+        isDuplicate: true,
+        reason: 'file',
+        existingBill: existingFileBill,
+      };
+    }
+  }
+
+  // Check for duplicate billing period (only if account is known)
+  if (accountId) {
+    const existingPeriod = await billingPeriodExists(
+      accountId,
+      billingPeriodStart,
+      billingPeriodEnd
+    );
+    if (existingPeriod) {
+      return {
+        isDuplicate: true,
+        reason: 'billing_period',
+        existingBill: existingPeriod,
+      };
+    }
+  }
+
+  return {
+    isDuplicate: false,
+    reason: null,
+  };
+}
+
+/**
  * Get bills requiring review
  */
 export async function getBillsRequiringReview(): Promise<Bill[]> {

@@ -12,11 +12,16 @@ export default function AccountsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     account_number: '',
     account_name: '',
     provider: 'Dhiraagu',
     description: '',
+  });
+  const [editFormData, setEditFormData] = useState({
+    provider: '',
   });
   const searchParams = useSearchParams();
 
@@ -30,6 +35,14 @@ export default function AccountsPage() {
       setShowForm(true);
     }
   }, [searchParams]);
+
+  // Cancel any active edits when edit mode is disabled
+  useEffect(() => {
+    if (!editMode && editingAccountId) {
+      setEditingAccountId(null);
+      setEditFormData({ provider: '' });
+    }
+  }, [editMode, editingAccountId]);
 
   const fetchAccounts = async () => {
     try {
@@ -76,6 +89,43 @@ export default function AccountsPage() {
     }
   };
 
+  const handleEditClick = (account: any) => {
+    setEditingAccountId(account.id);
+    setEditFormData({
+      provider: account.provider || 'Dhiraagu',
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingAccountId(null);
+    setEditFormData({ provider: '' });
+  };
+
+  const handleUpdateProvider = async (accountId: string) => {
+    try {
+      const res = await fetch('/api/accounts', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: accountId,
+          provider: editFormData.provider,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setEditingAccountId(null);
+        setEditFormData({ provider: '' });
+        fetchAccounts();
+      } else {
+        alert(data.error || 'Failed to update provider');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to update provider');
+    }
+  };
+
   if (loading) {
     return (
       <>
@@ -98,9 +148,32 @@ export default function AccountsPage() {
             Manage ISP service accounts
           </p>
         </div>
-        <Button onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Cancel' : 'Add Account'}
-        </Button>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <label htmlFor="edit-mode-toggle" className="text-sm font-medium cursor-pointer">
+              Edit Mode
+            </label>
+            <button
+              id="edit-mode-toggle"
+              type="button"
+              role="switch"
+              aria-checked={editMode}
+              onClick={() => setEditMode(!editMode)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
+                editMode ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  editMode ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+          <Button onClick={() => setShowForm(!showForm)}>
+            {showForm ? 'Cancel' : 'Add Account'}
+          </Button>
+        </div>
       </div>
 
       {error && (
@@ -201,11 +274,59 @@ export default function AccountsPage() {
             <Card key={account.id}>
               <CardContent className="p-6">
                 <div className="space-y-3">
-                  <div>
-                    <h3 className="font-semibold text-lg">{account.account_name}</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {account.provider} • {account.account_number}
-                    </p>
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-lg">{account.account_name}</h3>
+                      {editingAccountId === account.id ? (
+                        <div className="mt-2 space-y-2">
+                          <label className="block text-sm font-medium">
+                            Service Provider *
+                          </label>
+                          <select
+                            value={editFormData.provider}
+                            onChange={(e) =>
+                              setEditFormData({ ...editFormData, provider: e.target.value })
+                            }
+                            className="w-full px-3 py-2 border rounded-md bg-background"
+                          >
+                            <option value="Dhiraagu">Dhiraagu</option>
+                            <option value="Ooredoo">Ooredoo</option>
+                            <option value="Other">Other</option>
+                          </select>
+                          <div className="flex gap-2 mt-2">
+                            <Button
+                              size="sm"
+                              onClick={() => handleUpdateProvider(account.id)}
+                            >
+                              Save
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={handleCancelEdit}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-1">
+                          <p className="text-sm text-muted-foreground">
+                            <span className="font-medium">{account.provider}</span> • {account.account_number}
+                          </p>
+                          {editMode && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="mt-2"
+                              onClick={() => handleEditClick(account)}
+                            >
+                              Edit Provider
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {account.description && (
@@ -222,12 +343,19 @@ export default function AccountsPage() {
                       <p className="text-xs text-muted-foreground">Bills</p>
                     </div>
                     <div>
-                      <p className="text-2xl font-bold">
-                        {account.total_spending
-                          ? `MVR ${parseFloat(account.total_spending).toFixed(0)}`
-                          : 'MVR 0'}
-                      </p>
-                      <p className="text-xs text-muted-foreground">Total Spent</p>
+                      <div className="flex items-baseline gap-2">
+                        <p className="text-2xl font-bold">
+                          {account.current_month_total
+                            ? `MVR ${parseFloat(account.current_month_total.toString()).toFixed(0)}`
+                            : 'MVR 0'}
+                        </p>
+                        {account.previous_month_total !== undefined && account.previous_month_total > 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            (prev: MVR {parseFloat(account.previous_month_total.toString()).toFixed(0)})
+                          </p>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">This Month</p>
                     </div>
                   </div>
 

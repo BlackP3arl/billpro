@@ -1,5 +1,5 @@
-import { convertPdfToImages, getPdfPageCount, cleanupTempImages } from './pdf-to-image';
-import { extractBillData, extractBillDataFromPages } from '../ai/bill-extractor';
+import { convertPdfToImages, convertPdfPageToImage, getPdfPageCount, cleanupTempImages } from './pdf-to-image';
+import { extractBillData, extractBillDataFromPages, extractInvoiceAndAccount, QuickScanResult } from '../ai/bill-extractor';
 import { BillExtractionResult } from '../types/bill';
 import fs from 'fs/promises';
 import path from 'path';
@@ -8,6 +8,79 @@ export interface ProcessPdfResult {
   extraction: BillExtractionResult;
   pageCount: number;
   fileSize: number;
+}
+
+/**
+ * Quick scan: Extract only invoice and account number from first page
+ * Used for duplicate detection before full extraction
+ * 
+ * Strategy:
+ * 1. First try offline text extraction (fast, free)
+ * 2. If that fails or doesn't find numbers, fall back to AI quick scan
+ */
+export async function quickScanPdfBill(pdfPath: string): Promise<QuickScanResult> {
+  try {
+    // Step 1: Try offline text extraction first (fastest, free)
+    const { extractNumbersFromPdfFirstPage } = await import('./pdf-text-extractor');
+    
+    try {
+      const extractedNumbers = await extractNumbersFromPdfFirstPage(pdfPath);
+      
+      // If we found both numbers, return immediately (no AI call needed!)
+      if (extractedNumbers.invoiceNumber && extractedNumbers.accountNumber) {
+        console.log('Quick scan (offline): Found both numbers via text extraction');
+        return {
+          invoiceNumber: extractedNumbers.invoiceNumber,
+          accountNumber: extractedNumbers.accountNumber,
+          confidence: 95, // High confidence for text extraction
+        };
+      }
+
+      // If we found at least invoice number, that's enough for duplicate check
+      if (extractedNumbers.invoiceNumber) {
+        console.log('Quick scan (offline): Found invoice number via text extraction');
+        return {
+          invoiceNumber: extractedNumbers.invoiceNumber,
+          accountNumber: extractedNumbers.accountNumber || 'UNKNOWN',
+          confidence: extractedNumbers.accountNumber ? 90 : 85,
+        };
+      }
+
+      console.log('Quick scan (offline): Could not extract numbers, falling back to AI');
+    } catch (textExtractionError: any) {
+      console.log('Text extraction failed, falling back to AI:', textExtractionError.message);
+    }
+
+    // Step 2: Fall back to AI quick scan if text extraction failed or didn't find numbers
+    // Convert only first page to image with lower resolution for cost savings
+    const firstPageImage = await convertPdfPageToImage(pdfPath, 1, {
+      density: 150, // Lower DPI for quick scan (vs 200 for full scan)
+      format: 'png',
+      width: 1600, // Smaller dimensions for quick scan (vs 2400x3200)
+      height: 2200,
+    });
+
+    console.log('Quick scan (AI): Converted first page to image');
+
+    // Extract only invoice and account number using AI
+    const result = await extractInvoiceAndAccount(firstPageImage);
+
+    console.log('Quick scan (AI) complete:', {
+      invoiceNumber: result.invoiceNumber,
+      accountNumber: result.accountNumber,
+      confidence: result.confidence,
+    });
+
+    // Clean up temporary image files
+    await cleanupTempImages();
+
+    return result;
+  } catch (error: any) {
+    console.error('Quick scan error:', error);
+    // Try to clean up even on error
+    await cleanupTempImages().catch(() => {});
+    throw new Error(`Failed to quick scan PDF bill: ${error.message}`);
+  }
 }
 
 /**

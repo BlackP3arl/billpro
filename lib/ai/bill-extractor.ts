@@ -1,7 +1,86 @@
 import anthropic, { getAnthropicModel } from './anthropic-client';
-import { BILL_EXTRACTION_PROMPT } from './prompts';
+import { BILL_EXTRACTION_PROMPT, QUICK_SCAN_PROMPT } from './prompts';
 import { BillExtractionResult } from '../types/bill';
 import Anthropic from '@anthropic-ai/sdk';
+
+export interface QuickScanResult {
+  invoiceNumber: string;
+  accountNumber: string;
+  confidence: number;
+}
+
+/**
+ * Quick scan: Extract only invoice number and account number from first page
+ * This is used for duplicate detection before full extraction
+ */
+export async function extractInvoiceAndAccount(
+  imageBase64: string,
+  mediaType: 'image/png' | 'image/jpeg' | 'image/webp' = 'image/png'
+): Promise<QuickScanResult> {
+  try {
+    const message = await anthropic.messages.create({
+      model: getAnthropicModel(),
+      max_tokens: 500, // Lower token limit for quick scan
+      temperature: 0.1,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: mediaType,
+                data: imageBase64,
+              },
+            },
+            {
+              type: 'text',
+              text: QUICK_SCAN_PROMPT,
+            },
+          ],
+        },
+      ],
+    });
+
+    const textContent = message.content.find(
+      (block): block is Anthropic.TextBlock => block.type === 'text'
+    );
+
+    if (!textContent) {
+      throw new Error('No text content in Claude response');
+    }
+
+    let jsonText = textContent.text.trim();
+
+    // Remove markdown code blocks if present
+    if (jsonText.startsWith('```json')) {
+      jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+    } else if (jsonText.startsWith('```')) {
+      jsonText = jsonText.replace(/```\n?/g, '');
+    }
+
+    const extracted: QuickScanResult = JSON.parse(jsonText);
+
+    // Validate required fields
+    if (!extracted.invoiceNumber || !extracted.accountNumber) {
+      throw new Error('Missing invoice number or account number in quick scan');
+    }
+
+    if (
+      typeof extracted.confidence !== 'number' ||
+      extracted.confidence < 0 ||
+      extracted.confidence > 100
+    ) {
+      throw new Error('confidence must be a number between 0 and 100');
+    }
+
+    return extracted;
+  } catch (error: any) {
+    console.error('Quick scan extraction error:', error);
+    throw new Error(`Failed to extract invoice and account: ${error.message}`);
+  }
+}
 
 /**
  * Extract bill data from PDF image using Claude Vision API

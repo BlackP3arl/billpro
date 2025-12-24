@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Header } from '@/components/header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -170,7 +171,14 @@ export default function BillDetailPage() {
                   {lineItems.map((item, index) => (
                     <tr key={item.id} className="border-b hover:bg-muted/50">
                       <td className="p-3 text-muted-foreground">{index + 1}</td>
-                      <td className="p-3 font-mono">{item.service_number}</td>
+                      <td className="p-3">
+                        <Link
+                          href={`/service-numbers/${item.service_number}`}
+                          className="font-mono text-primary hover:underline cursor-pointer"
+                        >
+                          {item.service_number}
+                        </Link>
+                      </td>
                       <td className="p-3">{item.package_name}</td>
                       <td className="p-3 text-right">
                         MVR {Number(item.subscription_charge).toFixed(2)}

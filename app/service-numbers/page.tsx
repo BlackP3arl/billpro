@@ -251,6 +251,7 @@ export default function ServiceNumbersPage() {
                   <tr className="border-b">
                     <th className="text-left p-3 font-semibold">Service Number</th>
                     <th className="text-left p-3 font-semibold">Account</th>
+                    <th className="text-left p-3 font-semibold">Account Number</th>
                     <th className="text-left p-3 font-semibold">Package</th>
                     <th className="text-left p-3 font-semibold">First Seen</th>
                     <th className="text-left p-3 font-semibold">Last Seen</th>
@@ -271,13 +272,13 @@ export default function ServiceNumbersPage() {
                       <td className="p-3">
                         <div>
                           <p className="font-medium">{sn.account_name || sn.account_number}</p>
-                          <p className="text-xs text-muted-foreground font-mono">
-                            {sn.account_number}
-                          </p>
                           <p className="text-xs text-muted-foreground">
                             {sn.provider}
                           </p>
                         </div>
+                      </td>
+                      <td className="p-3">
+                        <p className="font-mono text-sm">{sn.account_number}</p>
                       </td>
                       <td className="p-3">
                         <p className="text-sm">{sn.package_name || '-'}</p>

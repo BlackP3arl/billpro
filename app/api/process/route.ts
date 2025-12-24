@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import { processPdfBill } from '@/lib/pdf/pdf-processor';
-import { createBillFromExtraction } from '@/lib/services/bill-service';
+import { createBillFromExtraction, checkForDuplicates } from '@/lib/services/bill-service';
 import { getAccountByNumber, autoRegisterAccount } from '@/lib/services/account-service';
 import { detectAlertsForBill } from '@/lib/services/alert-service';
 import { detectNewServiceNumbers, getNewServiceNumbers } from '@/lib/services/service-number-service';
@@ -9,7 +9,7 @@ import { recordMonthlyChargesForBill } from '@/lib/services/monthly-charge-servi
 
 export async function POST(request: NextRequest) {
   try {
-    const { fileName, filePath, fileSize } = await request.json();
+    const { fileName, filePath, fileSize, skipDuplicateCheck } = await request.json();
 
     if (!fileName || !filePath) {
       return NextResponse.json(
@@ -40,6 +40,45 @@ export async function POST(request: NextRequest) {
       account = await autoRegisterAccount(extraction.accountNumber, 'Dhiraagu');
       accountAutoRegistered = true;
       console.log(`Auto-registered new account: ${extraction.accountNumber}`);
+    }
+
+    // Check for duplicates before processing (unless user chose to skip)
+    if (!skipDuplicateCheck) {
+      const duplicateCheck = await checkForDuplicates(
+        extraction.invoiceNumber,
+        account.id,
+        new Date(extraction.billingPeriodStart),
+        new Date(extraction.billingPeriodEnd),
+        fileName
+      );
+
+      if (duplicateCheck.isDuplicate) {
+        let errorMessage = '';
+        switch (duplicateCheck.reason) {
+          case 'invoice':
+            errorMessage = `Invoice ${extraction.invoiceNumber} already exists in the system.`;
+            break;
+          case 'file':
+            errorMessage = `File "${fileName}" has already been uploaded.`;
+            break;
+          case 'billing_period':
+            errorMessage = `Account ${extraction.accountNumber} already has a bill for the billing period ${extraction.billingPeriodStart} to ${extraction.billingPeriodEnd}.`;
+            break;
+          default:
+            errorMessage = 'This bill appears to be a duplicate.';
+        }
+
+        return NextResponse.json(
+          {
+            success: false,
+            error: errorMessage,
+            isDuplicate: true,
+            duplicateReason: duplicateCheck.reason,
+            existingBill: duplicateCheck.existingBill,
+          },
+          { status: 409 } // Conflict status code
+        );
+      }
     }
 
     // Create bill in database
