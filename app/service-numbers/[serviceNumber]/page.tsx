@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Header } from '@/components/header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 
 interface MonthlyCharge {
   id: string;
@@ -30,6 +31,12 @@ interface Totals {
   month_count: number;
 }
 
+interface MonthlyData {
+  month: number;
+  monthName: string;
+  total: number;
+}
+
 export default function ServiceNumberDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -37,6 +44,7 @@ export default function ServiceNumberDetailPage() {
 
   const [monthlyCharges, setMonthlyCharges] = useState<MonthlyCharge[]>([]);
   const [totals, setTotals] = useState<Totals | null>(null);
+  const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,14 +54,23 @@ export default function ServiceNumberDetailPage() {
 
   const fetchServiceNumberDetails = async () => {
     try {
-      const res = await fetch(`/api/service-numbers/${serviceNumber}`);
-      const data = await res.json();
+      const [detailsRes, monthlyTotalsRes] = await Promise.all([
+        fetch(`/api/service-numbers/${serviceNumber}`),
+        fetch(`/api/service-numbers/${serviceNumber}/monthly-totals?year=${new Date().getFullYear()}`),
+      ]);
 
-      if (data.success) {
-        setMonthlyCharges(data.data.monthlyCharges);
-        setTotals(data.data.totals);
+      const detailsData = await detailsRes.json();
+      const monthlyTotalsData = await monthlyTotalsRes.json();
+
+      if (detailsData.success) {
+        setMonthlyCharges(detailsData.data.monthlyCharges);
+        setTotals(detailsData.data.totals);
       } else {
-        setError(data.error);
+        setError(detailsData.error);
+      }
+
+      if (monthlyTotalsData.success) {
+        setMonthlyData(monthlyTotalsData.data);
       }
     } catch (err: any) {
       setError(err.message);
@@ -104,6 +121,57 @@ export default function ServiceNumberDetailPage() {
         <h1 className="text-3xl font-bold">Service Number Details</h1>
         <p className="text-xl font-mono text-muted-foreground">{serviceNumber}</p>
       </div>
+
+      {/* Monthly Trend Chart */}
+      {monthlyData.length > 0 && monthlyData.some((m) => m.total > 0) && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Monthly Trend Analysis ({new Date().getFullYear()})</CardTitle>
+            <CardDescription>
+              Total charges per month for this service number
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={monthlyData}>
+                  <XAxis
+                    dataKey="monthName"
+                    tick={{ fontSize: 12 }}
+                    interval="preserveStartEnd"
+                  />
+                  <YAxis
+                    tick={{ fontSize: 12 }}
+                    width={60}
+                    tickFormatter={(value) => {
+                      if (value >= 1000) return `MVR ${(value / 1000).toFixed(1)}k`;
+                      return `MVR ${value}`;
+                    }}
+                  />
+                  <Tooltip
+                    formatter={(value: number) => [`MVR ${value.toFixed(2)}`, 'Total']}
+                    labelFormatter={(label) => `Month: ${label}`}
+                    contentStyle={{
+                      backgroundColor: 'var(--background)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="total"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={2}
+                    dot={{ r: 4 }}
+                    activeDot={{ r: 6 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Summary Cards */}
       {totals && (

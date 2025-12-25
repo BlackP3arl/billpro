@@ -215,3 +215,54 @@ export async function autoRegisterAccount(
   console.log(`Auto-registered new account: ${accountNumber}`);
   return result.rows[0];
 }
+
+/**
+ * Get recently added accounts (within specified hours)
+ */
+export async function getRecentlyAddedAccounts(hours: number = 24): Promise<ServiceAccount[]> {
+  const result = await query<ServiceAccount>(
+    `SELECT * FROM service_accounts
+     WHERE created_at >= NOW() - INTERVAL '1 hour' * $1
+     ORDER BY created_at DESC`,
+    [hours]
+  );
+  return result.rows;
+}
+
+/**
+ * Get monthly totals for an account for the current year
+ */
+export async function getAccountMonthlyTotals(
+  accountId: string,
+  year: number = new Date().getFullYear()
+): Promise<Array<{ month: number; monthName: string; total: number }>> {
+  const result = await query<{ month: number; total: number }>(
+    `SELECT 
+      EXTRACT(MONTH FROM billing_period_start)::INTEGER as month,
+      COALESCE(SUM(total_due), 0) as total
+     FROM bills
+     WHERE service_account_id = $1
+     AND EXTRACT(YEAR FROM billing_period_start) = $2
+     AND processing_status = 'completed'
+     GROUP BY EXTRACT(MONTH FROM billing_period_start)
+     ORDER BY month`,
+    [accountId, year]
+  );
+
+  const monthNames = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ];
+
+  // Create array with all 12 months, filling in missing months with 0
+  const monthlyData = Array.from({ length: 12 }, (_, i) => {
+    const monthData = result.rows.find((r) => r.month === i + 1);
+    return {
+      month: i + 1,
+      monthName: monthNames[i],
+      total: monthData ? parseFloat(monthData.total.toString()) : 0,
+    };
+  });
+
+  return monthlyData;
+}

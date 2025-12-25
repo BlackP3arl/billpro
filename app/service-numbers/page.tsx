@@ -15,6 +15,7 @@ interface ServiceNumber {
   account_name: string;
   provider: string;
   package_name?: string;
+  division_name?: string;
   first_seen_date: string;
   last_seen_date?: string;
   first_seen_invoice?: string;
@@ -34,6 +35,7 @@ export default function ServiceNumbersPage() {
   const [searchServiceNumber, setSearchServiceNumber] = useState('');
   const [searchAccountNumber, setSearchAccountNumber] = useState('');
   const [searchPackageName, setSearchPackageName] = useState('');
+  const [searchDivisionName, setSearchDivisionName] = useState('');
   const [filterActive, setFilterActive] = useState<string>('all'); // 'all', 'active', 'inactive'
 
   useEffect(() => {
@@ -42,7 +44,7 @@ export default function ServiceNumbersPage() {
 
   useEffect(() => {
     applyFilters();
-  }, [serviceNumbers, searchServiceNumber, searchAccountNumber, searchPackageName, filterActive]);
+  }, [serviceNumbers, searchServiceNumber, searchAccountNumber, searchPackageName, searchDivisionName, filterActive]);
 
   const fetchServiceNumbers = async () => {
     try {
@@ -86,6 +88,13 @@ export default function ServiceNumbersPage() {
       );
     }
 
+    // Filter by division name
+    if (searchDivisionName) {
+      filtered = filtered.filter((sn) =>
+        sn.division_name?.toLowerCase().includes(searchDivisionName.toLowerCase())
+      );
+    }
+
     // Filter by active status
     if (filterActive === 'active') {
       filtered = filtered.filter((sn) => sn.is_active);
@@ -100,6 +109,7 @@ export default function ServiceNumbersPage() {
     setSearchServiceNumber('');
     setSearchAccountNumber('');
     setSearchPackageName('');
+    setSearchDivisionName('');
     setFilterActive('all');
   };
 
@@ -146,11 +156,11 @@ export default function ServiceNumbersPage() {
         <CardHeader>
           <CardTitle>Search & Filter</CardTitle>
           <CardDescription>
-            Filter service numbers by account, number, or package
+            Filter service numbers by account, number, package, or division
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <div>
               <label className="text-sm font-medium mb-2 block">Service Number</label>
               <input
@@ -180,6 +190,17 @@ export default function ServiceNumbersPage() {
                 placeholder="Search by package..."
                 value={searchPackageName}
                 onChange={(e) => setSearchPackageName(e.target.value)}
+                className="w-full px-3 py-2 border rounded-md bg-background"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-2 block">Division</label>
+              <input
+                type="text"
+                placeholder="Search by division..."
+                value={searchDivisionName}
+                onChange={(e) => setSearchDivisionName(e.target.value)}
                 className="w-full px-3 py-2 border rounded-md bg-background"
               />
             </div>
@@ -253,6 +274,7 @@ export default function ServiceNumbersPage() {
                     <th className="text-left p-3 font-semibold">Account</th>
                     <th className="text-left p-3 font-semibold">Account Number</th>
                     <th className="text-left p-3 font-semibold">Package</th>
+                    <th className="text-left p-3 font-semibold">Division</th>
                     <th className="text-left p-3 font-semibold">First Seen</th>
                     <th className="text-left p-3 font-semibold">Last Seen</th>
                     <th className="text-left p-3 font-semibold">Status</th>
@@ -282,6 +304,9 @@ export default function ServiceNumbersPage() {
                       </td>
                       <td className="p-3">
                         <p className="text-sm">{sn.package_name || '-'}</p>
+                      </td>
+                      <td className="p-3">
+                        <p className="text-sm">{sn.division_name || '-'}</p>
                       </td>
                       <td className="p-3">
                         <div>

@@ -6,6 +6,13 @@ import Link from 'next/link';
 import { Header } from '@/components/header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
+
+interface MonthlyData {
+  month: number;
+  monthName: string;
+  total: number;
+}
 
 export default function AccountsPage() {
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -14,6 +21,7 @@ export default function AccountsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
+  const [monthlyData, setMonthlyData] = useState<Record<string, MonthlyData[]>>({});
   const [formData, setFormData] = useState({
     account_number: '',
     account_name: '',
@@ -51,6 +59,8 @@ export default function AccountsPage() {
 
       if (data.success) {
         setAccounts(data.data);
+        // Fetch monthly data for each account
+        fetchMonthlyDataForAccounts(data.data);
       } else {
         setError(data.error);
       }
@@ -59,6 +69,27 @@ export default function AccountsPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchMonthlyDataForAccounts = async (accountsList: any[]) => {
+    const currentYear = new Date().getFullYear();
+    const dataMap: Record<string, MonthlyData[]> = {};
+
+    // Fetch monthly data for all accounts in parallel
+    const promises = accountsList.map(async (account) => {
+      try {
+        const res = await fetch(`/api/accounts/${account.id}/monthly-totals?year=${currentYear}`);
+        const data = await res.json();
+        if (data.success) {
+          dataMap[account.id] = data.data;
+        }
+      } catch (err) {
+        console.error(`Failed to fetch monthly data for account ${account.id}:`, err);
+      }
+    });
+
+    await Promise.all(promises);
+    setMonthlyData(dataMap);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -364,6 +395,52 @@ export default function AccountsPage() {
                       <span className="px-2 py-1 bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 rounded text-xs">
                         ⚠️ {account.active_alerts} active alert(s)
                       </span>
+                    </div>
+                  )}
+
+                  {/* Monthly Trend Chart */}
+                  {monthlyData[account.id] && monthlyData[account.id].some((m) => m.total > 0) && (
+                    <div className="pt-4 border-t">
+                      <p className="text-xs text-muted-foreground mb-2">
+                        Monthly Trend ({new Date().getFullYear()})
+                      </p>
+                      <div className="h-32 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={monthlyData[account.id]}>
+                            <XAxis
+                              dataKey="monthName"
+                              tick={{ fontSize: 10 }}
+                              interval="preserveStartEnd"
+                            />
+                            <YAxis
+                              tick={{ fontSize: 10 }}
+                              width={50}
+                              tickFormatter={(value) => {
+                                if (value >= 1000) return `${(value / 1000).toFixed(0)}k`;
+                                return value.toString();
+                              }}
+                            />
+                            <Tooltip
+                              formatter={(value: number) => [`MVR ${value.toFixed(2)}`, 'Total']}
+                              labelFormatter={(label) => `Month: ${label}`}
+                              contentStyle={{
+                                backgroundColor: 'var(--background)',
+                                border: '1px solid var(--border)',
+                                borderRadius: '4px',
+                                fontSize: '12px',
+                              }}
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="total"
+                              stroke="hsl(var(--primary))"
+                              strokeWidth={2}
+                              dot={{ r: 3 }}
+                              activeDot={{ r: 5 }}
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
                     </div>
                   )}
                 </div>

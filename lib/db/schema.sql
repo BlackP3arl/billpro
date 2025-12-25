@@ -160,6 +160,9 @@ CREATE TABLE IF NOT EXISTS service_numbers (
   -- Package Information
   package_name VARCHAR(255),
 
+  -- Organization Information
+  division_name VARCHAR(255), -- Division of MTCC using this service
+
   -- Tracking
   first_seen_bill_id UUID REFERENCES bills(id),
   first_seen_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -181,6 +184,7 @@ CREATE INDEX idx_service_numbers_number ON service_numbers(service_number);
 CREATE INDEX idx_service_numbers_account ON service_numbers(service_account_id);
 CREATE INDEX idx_service_numbers_active ON service_numbers(is_active);
 CREATE INDEX idx_service_numbers_package ON service_numbers(package_name);
+CREATE INDEX idx_service_numbers_division ON service_numbers(division_name);
 
 -- Service Number Monthly Charges Table
 CREATE TABLE IF NOT EXISTS service_number_monthly_charges (

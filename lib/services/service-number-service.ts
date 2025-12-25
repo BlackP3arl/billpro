@@ -5,6 +5,7 @@ export interface ServiceNumber {
   service_number: string;
   service_account_id: string;
   package_name?: string;
+  division_name?: string; // Division of MTCC using this service
   first_seen_bill_id?: string;
   first_seen_date: Date;
   last_seen_bill_id?: string;
@@ -179,6 +180,7 @@ export interface ServiceNumberFilters {
   accountId?: string;
   serviceNumber?: string;
   packageName?: string;
+  divisionName?: string;
   isActive?: boolean;
 }
 
@@ -221,6 +223,12 @@ export async function getServiceNumbers(filters?: ServiceNumberFilters) {
     paramIndex++;
   }
 
+  if (filters?.divisionName) {
+    sql += ` AND sn.division_name ILIKE $${paramIndex}`;
+    params.push(`%${filters.divisionName}%`);
+    paramIndex++;
+  }
+
   if (filters?.isActive !== undefined) {
     sql += ` AND sn.is_active = $${paramIndex}`;
     params.push(filters.isActive);
@@ -248,4 +256,27 @@ export async function detectRemovedServiceNumbers(
   );
 
   return result.rows.map((row: any) => row.service_number);
+}
+
+/**
+ * Get recently added service numbers (within specified hours)
+ */
+export async function getRecentlyAddedServiceNumbers(hours: number = 24): Promise<any[]> {
+  const result = await query(
+    `SELECT 
+      sn.*,
+      sa.account_number,
+      sa.account_name,
+      sa.provider,
+      fb.invoice_number as first_seen_invoice,
+      lb.invoice_number as last_seen_invoice
+     FROM service_numbers sn
+     LEFT JOIN service_accounts sa ON sn.service_account_id = sa.id
+     LEFT JOIN bills fb ON sn.first_seen_bill_id = fb.id
+     LEFT JOIN bills lb ON sn.last_seen_bill_id = lb.id
+     WHERE sn.created_at >= NOW() - INTERVAL '1 hour' * $1
+     ORDER BY sn.created_at DESC`,
+    [hours]
+  );
+  return result.rows;
 }

@@ -200,3 +200,40 @@ export async function recordMonthlyChargesForBill(
 
   return recordedCount;
 }
+
+/**
+ * Get monthly totals for a service number for a specific year
+ */
+export async function getServiceNumberMonthlyTotals(
+  serviceNumber: string,
+  year: number = new Date().getFullYear()
+): Promise<Array<{ month: number; monthName: string; total: number }>> {
+  const result = await query<{ month: number; total: number }>(
+    `SELECT 
+      EXTRACT(MONTH FROM billing_period_start)::INTEGER as month,
+      COALESCE(SUM(total_charge), 0) as total
+     FROM service_number_monthly_charges
+     WHERE service_number = $1
+     AND EXTRACT(YEAR FROM billing_period_start) = $2
+     GROUP BY EXTRACT(MONTH FROM billing_period_start)
+     ORDER BY month`,
+    [serviceNumber, year]
+  );
+
+  const monthNames = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ];
+
+  // Create array with all 12 months, filling in missing months with 0
+  const monthlyData = Array.from({ length: 12 }, (_, i) => {
+    const monthData = result.rows.find((r) => r.month === i + 1);
+    return {
+      month: i + 1,
+      monthName: monthNames[i],
+      total: monthData ? parseFloat(monthData.total.toString()) : 0,
+    };
+  });
+
+  return monthlyData;
+}

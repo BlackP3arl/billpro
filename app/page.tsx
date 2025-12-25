@@ -41,6 +41,20 @@ export default function Home() {
             <div className="grid gap-4 md:grid-cols-3">
               <Card>
                 <CardHeader>
+                  <CardTitle>Quick Action</CardTitle>
+                </CardHeader>
+                <CardContent className="flex items-center justify-center h-full">
+                  <Link
+                    href="/upload"
+                    className="inline-flex items-center justify-center rounded-md bg-primary px-6 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 w-full"
+                  >
+                    Upload Bill
+                  </Link>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
                   <CardTitle>Total Accounts</CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -49,12 +63,20 @@ export default function Home() {
                   ) : (
                     <div>
                       <p className="text-3xl font-bold">{stats?.totalAccounts || 0}</p>
-                      <Link
-                        href="/accounts"
-                        className="text-sm text-primary hover:underline mt-2 inline-block"
-                      >
-                        View all accounts →
-                      </Link>
+                      <div className="flex flex-col gap-1 mt-2">
+                        <Link
+                          href="/accounts"
+                          className="text-sm text-primary hover:underline"
+                        >
+                          View all accounts →
+                        </Link>
+                        <Link
+                          href="/new-items"
+                          className="text-xs text-muted-foreground hover:text-primary hover:underline"
+                        >
+                          View newly added →
+                        </Link>
+                      </div>
                     </div>
                   )}
                 </CardContent>
@@ -70,28 +92,22 @@ export default function Home() {
                   ) : (
                     <div>
                       <p className="text-3xl font-bold">{stats?.totalServiceNumbers || 0}</p>
-                      <Link
-                        href="/service-numbers"
-                        className="text-sm text-primary hover:underline mt-2 inline-block"
-                      >
-                        View all service numbers →
-                      </Link>
+                      <div className="flex flex-col gap-1 mt-2">
+                        <Link
+                          href="/service-numbers"
+                          className="text-sm text-primary hover:underline"
+                        >
+                          View all service numbers →
+                        </Link>
+                        <Link
+                          href="/new-items"
+                          className="text-xs text-muted-foreground hover:text-primary hover:underline"
+                        >
+                          View newly added →
+                        </Link>
+                      </div>
                     </div>
                   )}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Quick Action</CardTitle>
-                </CardHeader>
-                <CardContent className="flex items-center justify-center h-full">
-                  <Link
-                    href="/upload"
-                    className="inline-flex items-center justify-center rounded-md bg-primary px-6 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 w-full"
-                  >
-                    Upload Bill
-                  </Link>
                 </CardContent>
               </Card>
             </div>

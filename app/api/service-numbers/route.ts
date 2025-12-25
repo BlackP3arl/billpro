@@ -9,6 +9,7 @@ export async function GET(request: NextRequest) {
       accountId: searchParams.get('accountId') || undefined,
       serviceNumber: searchParams.get('serviceNumber') || undefined,
       packageName: searchParams.get('packageName') || undefined,
+      divisionName: searchParams.get('divisionName') || undefined,
       isActive: searchParams.get('isActive') === 'true' ? true :
                 searchParams.get('isActive') === 'false' ? false : undefined,
     };
