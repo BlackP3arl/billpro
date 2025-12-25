@@ -1,6 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { writeFile } from 'fs/promises';
+import { writeFile, access } from 'fs/promises';
+import { constants } from 'fs';
 import path from 'path';
+import crypto from 'crypto';
+
+/**
+ * Check if a file exists at the given path
+ */
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath, constants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,19 +45,42 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate unique filename
-    const timestamp = Date.now();
-    const randomStr = Math.random().toString(36).substring(7);
-    const originalName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const fileName = `${timestamp}_${randomStr}_${originalName}`;
-
-    // Save file
+    // Read file into buffer
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
+
+    // Calculate MD5 hash
+    const hash = crypto.createHash('md5').update(buffer).digest('hex');
+
+    // Sanitize original filename
+    const sanitizedOriginalName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    
+    // Generate filename with hash: {hash}_{originalName}.pdf
+    const fileName = `${hash}_${sanitizedOriginalName}`;
 
     const uploadDir = path.join(process.cwd(), 'public', 'uploads');
     const filePath = path.join(uploadDir, fileName);
 
+    // Check if file with this hash already exists
+    const exists = await fileExists(filePath);
+
+    if (exists) {
+      // File already exists, return existing file info
+      return NextResponse.json({
+        success: true,
+        data: {
+          fileName,
+          filePath: `/uploads/${fileName}`,
+          fileSize: file.size,
+          originalName: file.name,
+          hash,
+          fileReused: true,
+          existingFilePath: `/uploads/${fileName}`,
+        },
+      });
+    }
+
+    // File doesn't exist, save it
     await writeFile(filePath, buffer);
 
     return NextResponse.json({
@@ -53,6 +90,8 @@ export async function POST(request: NextRequest) {
         filePath: `/uploads/${fileName}`,
         fileSize: file.size,
         originalName: file.name,
+        hash,
+        fileReused: false,
       },
     });
   } catch (error: any) {

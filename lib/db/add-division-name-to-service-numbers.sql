@@ -10,3 +10,5 @@ CREATE INDEX IF NOT EXISTS idx_service_numbers_division ON service_numbers(divis
 -- Add comment to document the field
 COMMENT ON COLUMN service_numbers.division_name IS 'Division of MTCC using this service number';
 
+
+

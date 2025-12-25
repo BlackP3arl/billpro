@@ -69,6 +69,7 @@ export async function getAccountsWithStats(): Promise<ServiceAccountWithStats[]>
       AVG(b.total_due) as avg_bill_amount,
       MAX(b.bill_date) as latest_bill_date,
       (SELECT COUNT(*) FROM alerts WHERE service_account_id = sa.id AND status = 'active') as active_alerts,
+      (SELECT COUNT(*) FROM service_numbers WHERE service_account_id = sa.id) as service_numbers_count,
       -- Current month total (bills with billing_period_start in current month)
       COALESCE((
         SELECT SUM(b2.total_due)
@@ -167,6 +168,52 @@ export async function updateAccount(
   }
 
   return result.rows[0];
+}
+
+/**
+ * Check if an account can be deleted (no service numbers or bills/line items)
+ */
+export async function canDeleteAccount(id: string): Promise<{
+  canDelete: boolean;
+  reason?: string;
+  serviceNumbersCount: number;
+  billsCount: number;
+}> {
+  // Check for service numbers
+  const serviceNumbersResult = await query<{ count: string }>(
+    'SELECT COUNT(*) as count FROM service_numbers WHERE service_account_id = $1',
+    [id]
+  );
+  const serviceNumbersCount = parseInt(serviceNumbersResult.rows[0].count);
+
+  // Check for bills (which would have line items)
+  const billsResult = await query<{ count: string }>(
+    'SELECT COUNT(*) as count FROM bills WHERE service_account_id = $1',
+    [id]
+  );
+  const billsCount = parseInt(billsResult.rows[0].count);
+
+  if (serviceNumbersCount > 0 || billsCount > 0) {
+    const reasons: string[] = [];
+    if (serviceNumbersCount > 0) {
+      reasons.push(`${serviceNumbersCount} service number(s)`);
+    }
+    if (billsCount > 0) {
+      reasons.push(`${billsCount} bill(s) with line items`);
+    }
+    return {
+      canDelete: false,
+      reason: `Cannot delete account: ${reasons.join(' and ')} associated`,
+      serviceNumbersCount,
+      billsCount,
+    };
+  }
+
+  return {
+    canDelete: true,
+    serviceNumbersCount: 0,
+    billsCount: 0,
+  };
 }
 
 /**

@@ -5,6 +5,7 @@ import {
   createAccount,
   updateAccount,
   deleteAccount,
+  canDeleteAccount,
 } from '@/lib/services/account-service';
 
 export async function GET(request: NextRequest) {
@@ -89,6 +90,20 @@ export async function DELETE(request: NextRequest) {
     if (!id) {
       return NextResponse.json(
         { error: 'Account ID is required' },
+        { status: 400 }
+      );
+    }
+
+    // Check if account can be deleted
+    const deletionCheck = await canDeleteAccount(id);
+    if (!deletionCheck.canDelete) {
+      return NextResponse.json(
+        { 
+          error: deletionCheck.reason || 'Cannot delete account',
+          canDelete: false,
+          serviceNumbersCount: deletionCheck.serviceNumbersCount,
+          billsCount: deletionCheck.billsCount,
+        },
         { status: 400 }
       );
     }

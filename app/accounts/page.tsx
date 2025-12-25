@@ -29,7 +29,10 @@ export default function AccountsPage() {
     description: '',
   });
   const [editFormData, setEditFormData] = useState({
+    account_name: '',
     provider: '',
+    description: '',
+    is_active: true,
   });
   const searchParams = useSearchParams();
 
@@ -48,7 +51,12 @@ export default function AccountsPage() {
   useEffect(() => {
     if (!editMode && editingAccountId) {
       setEditingAccountId(null);
-      setEditFormData({ provider: '' });
+      setEditFormData({
+        account_name: '',
+        provider: '',
+        description: '',
+        is_active: true,
+      });
     }
   }, [editMode, editingAccountId]);
 
@@ -123,23 +131,40 @@ export default function AccountsPage() {
   const handleEditClick = (account: any) => {
     setEditingAccountId(account.id);
     setEditFormData({
+      account_name: account.account_name || '',
       provider: account.provider || 'Dhiraagu',
+      description: account.description || '',
+      is_active: account.is_active !== undefined ? account.is_active : true,
     });
   };
 
   const handleCancelEdit = () => {
     setEditingAccountId(null);
-    setEditFormData({ provider: '' });
+    setEditFormData({
+      account_name: '',
+      provider: '',
+      description: '',
+      is_active: true,
+    });
   };
 
-  const handleUpdateProvider = async (accountId: string) => {
+  const handleUpdateAccount = async (accountId: string) => {
     try {
+      // Validate required fields
+      if (!editFormData.account_name.trim()) {
+        alert('Account name is required');
+        return;
+      }
+
       const res = await fetch('/api/accounts', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: accountId,
+          account_name: editFormData.account_name.trim(),
           provider: editFormData.provider,
+          description: editFormData.description.trim() || null,
+          is_active: editFormData.is_active,
         }),
       });
 
@@ -147,13 +172,41 @@ export default function AccountsPage() {
 
       if (data.success) {
         setEditingAccountId(null);
-        setEditFormData({ provider: '' });
+        setEditFormData({
+          account_name: '',
+          provider: '',
+          description: '',
+          is_active: true,
+        });
         fetchAccounts();
       } else {
-        alert(data.error || 'Failed to update provider');
+        alert(data.error || 'Failed to update account');
       }
     } catch (err: any) {
-      alert(err.message || 'Failed to update provider');
+      alert(err.message || 'Failed to update account');
+    }
+  };
+
+  const handleDeleteAccount = async (accountId: string, accountName: string) => {
+    // Confirm deletion
+    if (!confirm(`Are you sure you want to delete the account "${accountName}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/accounts?id=${accountId}`, {
+        method: 'DELETE',
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        fetchAccounts();
+      } else {
+        alert(data.error || 'Failed to delete account');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete account');
     }
   };
 
@@ -309,27 +362,89 @@ export default function AccountsPage() {
                     <div className="flex-1">
                       <h3 className="font-semibold text-lg">{account.account_name}</h3>
                       {editingAccountId === account.id ? (
-                        <div className="mt-2 space-y-2">
-                          <label className="block text-sm font-medium">
-                            Service Provider *
-                          </label>
-                          <select
-                            value={editFormData.provider}
-                            onChange={(e) =>
-                              setEditFormData({ ...editFormData, provider: e.target.value })
-                            }
-                            className="w-full px-3 py-2 border rounded-md bg-background"
-                          >
-                            <option value="Dhiraagu">Dhiraagu</option>
-                            <option value="Ooredoo">Ooredoo</option>
-                            <option value="Other">Other</option>
-                          </select>
-                          <div className="flex gap-2 mt-2">
+                        <div className="mt-2 space-y-3 p-4 border rounded-lg bg-muted/30">
+                          <div>
+                            <label className="block text-sm font-medium mb-1">
+                              Account Number
+                            </label>
+                            <input
+                              type="text"
+                              value={account.account_number}
+                              disabled
+                              className="w-full px-3 py-2 border rounded-md bg-muted text-muted-foreground cursor-not-allowed"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Account number cannot be changed
+                            </p>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-1">
+                              Account Name *
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={editFormData.account_name}
+                              onChange={(e) =>
+                                setEditFormData({ ...editFormData, account_name: e.target.value })
+                              }
+                              className="w-full px-3 py-2 border rounded-md bg-background"
+                              placeholder="e.g., MTCC Main Office"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-1">
+                              Service Provider *
+                            </label>
+                            <select
+                              value={editFormData.provider}
+                              onChange={(e) =>
+                                setEditFormData({ ...editFormData, provider: e.target.value })
+                              }
+                              className="w-full px-3 py-2 border rounded-md bg-background"
+                            >
+                              <option value="Dhiraagu">Dhiraagu</option>
+                              <option value="Ooredoo">Ooredoo</option>
+                              <option value="Other">Other</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-1">
+                              Description
+                            </label>
+                            <textarea
+                              value={editFormData.description}
+                              onChange={(e) =>
+                                setEditFormData({ ...editFormData, description: e.target.value })
+                              }
+                              className="w-full px-3 py-2 border rounded-md bg-background"
+                              rows={2}
+                              placeholder="e.g., Mobile services for main office"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              id={`active-${account.id}`}
+                              checked={editFormData.is_active}
+                              onChange={(e) =>
+                                setEditFormData({ ...editFormData, is_active: e.target.checked })
+                              }
+                              className="w-4 h-4 rounded border-gray-300"
+                            />
+                            <label
+                              htmlFor={`active-${account.id}`}
+                              className="text-sm font-medium cursor-pointer"
+                            >
+                              Account is Active
+                            </label>
+                          </div>
+                          <div className="flex gap-2 pt-2">
                             <Button
                               size="sm"
-                              onClick={() => handleUpdateProvider(account.id)}
+                              onClick={() => handleUpdateAccount(account.id)}
                             >
-                              Save
+                              Save Changes
                             </Button>
                             <Button
                               size="sm"
@@ -346,24 +461,43 @@ export default function AccountsPage() {
                             <span className="font-medium">{account.provider}</span> • {account.account_number}
                           </p>
                           {editMode && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="mt-2"
-                              onClick={() => handleEditClick(account)}
-                            >
-                              Edit Provider
-                            </Button>
+                            <div className="flex gap-2 mt-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleEditClick(account)}
+                              >
+                                Edit Account
+                              </Button>
+                              {(account.total_bills === 0 || account.total_bills === null) && 
+                               (account.service_numbers_count === 0 || account.service_numbers_count === null || account.service_numbers_count === undefined) && (
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => handleDeleteAccount(account.id, account.account_name)}
+                                >
+                                  Delete
+                                </Button>
+                              )}
+                            </div>
                           )}
                         </div>
                       )}
                     </div>
                   </div>
 
-                  {account.description && (
+                  {account.description && !editingAccountId && (
                     <p className="text-sm text-muted-foreground">
                       {account.description}
                     </p>
+                  )}
+
+                  {!account.is_active && !editingAccountId && (
+                    <div className="pt-2">
+                      <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded text-xs">
+                        Inactive Account
+                      </span>
+                    </div>
                   )}
 
                   <div className="grid grid-cols-2 gap-4 pt-3 border-t">

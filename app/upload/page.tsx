@@ -37,6 +37,11 @@ export default function UploadPage() {
     reason: 'invoice' | 'billing_period' | 'file';
     existingBill?: any;
   } | null>(null);
+  const [fileReuseModal, setFileReuseModal] = useState<{
+    jobId: string;
+    fileName: string;
+    filePath: string;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
@@ -172,6 +177,170 @@ export default function UploadPage() {
     setDuplicateModal(null);
   };
 
+  const handleFileReuseContinue = (jobId: string) => {
+    setFileReuseModal(null);
+    // Continue with normal processing flow
+    // The uploadData is already stored, just proceed to quick scan
+    const job = jobs.find((j) => j.id === jobId);
+    if (!job || !job.result?.uploadData) return;
+
+    // Continue with quick scan
+    continueProcessingAfterUpload(jobId, job.result.uploadData);
+  };
+
+  const handleFileReuseCancel = (jobId: string) => {
+    const job = jobs.find((j) => j.id === jobId);
+    if (!job) return;
+
+    const controller = abortControllersRef.current.get(jobId);
+    if (controller) {
+      controller.abort();
+      abortControllersRef.current.delete(jobId);
+    }
+
+    const endTime = Date.now();
+    updateJob(jobId, {
+      status: 'cancelled',
+      progress: 0,
+      error: 'Processing cancelled - file already exists',
+      endTime,
+      duration: job.startTime ? endTime - job.startTime : 0,
+    });
+
+    setFileReuseModal(null);
+  };
+
+  const continueProcessingAfterUpload = async (jobId: string, uploadData: any) => {
+    const abortController = abortControllersRef.current.get(jobId);
+    if (!abortController) return;
+
+    try {
+      // Step 2: Quick scan for duplicate detection
+      updateJob(jobId, { status: 'quick-scanning', progress: 30 });
+
+      const preScanRes = await fetch('/api/process/pre-scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: uploadData.fileName,
+          filePath: uploadData.filePath,
+        }),
+        signal: abortController.signal,
+      });
+
+      // Check if cancelled
+      if (abortController.signal.aborted) {
+        return;
+      }
+
+      const preScanData = await preScanRes.json();
+
+      // Step 3: Check if duplicate found
+      if (preScanData.isDuplicate) {
+        // Store duplicate info and show modal
+        updateJob(jobId, {
+          status: 'duplicate-pending',
+          progress: 30,
+          duplicateInfo: {
+            invoiceNumber: preScanData.invoiceNumber,
+            accountNumber: preScanData.accountNumber,
+            reason: preScanData.duplicateReason,
+            existingBill: preScanData.existingBill,
+          },
+        });
+
+        setDuplicateModal({
+          jobId,
+          invoiceNumber: preScanData.invoiceNumber,
+          accountNumber: preScanData.accountNumber,
+          reason: preScanData.duplicateReason,
+          existingBill: preScanData.existingBill,
+        });
+
+        // Store uploadData for later use if user proceeds
+        updateJob(jobId, { 
+          result: { uploadData },
+          duplicateInfo: {
+            invoiceNumber: preScanData.invoiceNumber,
+            accountNumber: preScanData.accountNumber,
+            reason: preScanData.duplicateReason,
+            existingBill: preScanData.existingBill,
+          },
+        });
+        return;
+      }
+
+      // Not a duplicate, proceed with full scan
+      updateJob(jobId, { status: 'processing', progress: 40 });
+
+      const processRes = await fetch('/api/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(uploadData),
+        signal: abortController.signal,
+      });
+
+      // Check if cancelled
+      if (abortController.signal.aborted) {
+        return;
+      }
+
+      const processData = await processRes.json();
+
+      if (!processData.success) {
+        // Check if it's a duplicate (fallback check)
+        if (processData.isDuplicate) {
+          const job = jobs.find((j) => j.id === jobId);
+          const endTime = Date.now();
+          updateJob(jobId, {
+            status: 'failed',
+            error: processData.error || 'Duplicate bill detected',
+            endTime,
+            duration: job?.startTime ? endTime - job.startTime : 0,
+            result: {
+              isDuplicate: true,
+              duplicateReason: processData.duplicateReason,
+              existingBill: processData.existingBill,
+            },
+          });
+          abortControllersRef.current.delete(jobId);
+          return;
+        }
+        throw new Error(processData.error || 'Processing failed');
+      }
+
+      const job = jobs.find((j) => j.id === jobId);
+      const endTime = Date.now();
+      const duration = endTime - (job?.startTime || Date.now());
+
+      // Step 4: Mark as completed
+      updateJob(jobId, {
+        status: 'completed',
+        progress: 100,
+        result: processData.data,
+        endTime,
+        duration,
+      });
+      
+      abortControllersRef.current.delete(jobId);
+    } catch (err: any) {
+      if (abortController.signal.aborted) {
+        return;
+      }
+      
+      const job = jobs.find((j) => j.id === jobId);
+      const endTime = Date.now();
+      updateJob(jobId, {
+        status: 'failed',
+        error: err.message,
+        endTime,
+        duration: job?.startTime ? endTime - job.startTime : 0,
+      });
+      
+      abortControllersRef.current.delete(jobId);
+    }
+  };
+
   const processFile = async (file: File) => {
     const jobId = `job-${Date.now()}-${Math.random().toString(36).substring(7)}`;
     const startTime = Date.now();
@@ -220,112 +389,31 @@ export default function UploadPage() {
 
       updateJob(jobId, { progress: 20 });
 
-      // Step 2: Quick scan for duplicate detection
-      updateJob(jobId, { status: 'quick-scanning', progress: 30 });
-
-      const preScanRes = await fetch('/api/process/pre-scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fileName: uploadData.data.fileName,
-          filePath: uploadData.data.filePath,
-        }),
-        signal: abortController.signal,
-      });
-
-      // Check if cancelled
-      if (abortController.signal.aborted) {
-        return;
-      }
-
-      const preScanData = await preScanRes.json();
-
-      // Step 3: Check if duplicate found
-      if (preScanData.isDuplicate) {
-        // Store duplicate info and show modal
-        updateJob(jobId, {
-          status: 'duplicate-pending',
-          progress: 30,
-          duplicateInfo: {
-            invoiceNumber: preScanData.invoiceNumber,
-            accountNumber: preScanData.accountNumber,
-            reason: preScanData.duplicateReason,
-            existingBill: preScanData.existingBill,
-          },
-        });
-
-        setDuplicateModal({
-          jobId,
-          invoiceNumber: preScanData.invoiceNumber,
-          accountNumber: preScanData.accountNumber,
-          reason: preScanData.duplicateReason,
-          existingBill: preScanData.existingBill,
-        });
-
-        // Store uploadData for later use if user proceeds
+      // Check if file was reused (already exists in uploads folder)
+      if (uploadData.data.fileReused) {
+        // Store uploadData for later use
         updateJob(jobId, { 
           result: { uploadData: uploadData.data },
-          duplicateInfo: {
-            invoiceNumber: preScanData.invoiceNumber,
-            accountNumber: preScanData.accountNumber,
-            reason: preScanData.duplicateReason,
-            existingBill: preScanData.existingBill,
-          },
+          status: 'pending',
+        });
+
+        // Show file reuse modal
+        setFileReuseModal({
+          jobId,
+          fileName: uploadData.data.originalName,
+          filePath: uploadData.data.filePath,
         });
         return;
       }
 
-      // Not a duplicate, proceed with full scan
-      updateJob(jobId, { status: 'processing', progress: 40 });
-
-      const processRes = await fetch('/api/process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(uploadData.data),
-        signal: abortController.signal,
+      // File is new, continue with normal processing
+      // Store uploadData for later use
+      updateJob(jobId, { 
+        result: { uploadData: uploadData.data },
       });
 
-      // Check if cancelled
-      if (abortController.signal.aborted) {
-        return;
-      }
-
-      const processData = await processRes.json();
-
-      if (!processData.success) {
-        // Check if it's a duplicate (fallback check)
-        if (processData.isDuplicate) {
-          const endTime = Date.now();
-          updateJob(jobId, {
-            status: 'failed',
-            error: processData.error || 'Duplicate bill detected',
-            endTime,
-            duration: endTime - startTime,
-            result: {
-              isDuplicate: true,
-              duplicateReason: processData.duplicateReason,
-              existingBill: processData.existingBill,
-            },
-          });
-          abortControllersRef.current.delete(jobId);
-          return;
-        }
-        throw new Error(processData.error || 'Processing failed');
-      }
-
-      const endTime = Date.now();
-      const duration = endTime - startTime;
-
-      // Step 4: Mark as completed
-      updateJob(jobId, {
-        status: 'completed',
-        progress: 100,
-        result: processData.data,
-        endTime,
-        duration,
-      });
-      
-      abortControllersRef.current.delete(jobId);
+      // Step 2: Continue with processing (quick scan, then full scan)
+      await continueProcessingAfterUpload(jobId, uploadData.data);
     } catch (err: any) {
       // Don't update if it was cancelled
       if (abortController.signal.aborted) {
@@ -809,6 +897,56 @@ export default function UploadPage() {
               <Button onClick={() => router.push('/bills')}>
                 View All Bills
               </Button>
+            </div>
+          )}
+
+          {/* File Reuse Modal */}
+          {fileReuseModal && (
+            <div 
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+              onClick={() => {
+                // Don't close on outside click - user must make explicit choice
+              }}
+            >
+              <Card 
+                className="max-w-md w-full mx-4"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <CardHeader>
+                  <CardTitle>File Already Exists</CardTitle>
+                  <CardDescription>
+                    This file already exists in the system. The existing file will be used for processing.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <p className="text-sm">
+                      <strong>File Name:</strong>{' '}
+                      <span className="font-mono">{fileReuseModal.fileName}</span>
+                    </p>
+                    <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                      <p className="text-sm text-blue-800 dark:text-blue-200">
+                        ℹ️ The system detected that this file has been uploaded before. To save disk space, the existing file will be reused instead of creating a duplicate copy.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 pt-4">
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => handleFileReuseCancel(fileReuseModal.jobId)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      className="flex-1"
+                      onClick={() => handleFileReuseContinue(fileReuseModal.jobId)}
+                    >
+                      Continue
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           )}
 
