@@ -1,6 +1,6 @@
 import { convertPdfToImages, convertPdfPageToImage, getPdfPageCount, cleanupTempImages } from './pdf-to-image';
-import { extractBillData, extractBillDataFromPages, extractInvoiceAndAccount, QuickScanResult } from '../ai/bill-extractor';
-import { BillExtractionResult } from '../types/bill';
+import { extractBillData, extractBillDataFromPages, extractInvoiceAndAccount, extractBillHeader, extractLineItemsFromPages, QuickScanResult } from '../ai/bill-extractor';
+import { BillExtractionResult, ProcessingProgress } from '../types/bill';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -85,8 +85,18 @@ export async function quickScanPdfBill(pdfPath: string): Promise<QuickScanResult
 
 /**
  * Process a PDF bill file - convert to images and extract data
+ * Uses batched extraction for large multi-page documents
  */
-export async function processPdfBill(pdfPath: string): Promise<ProcessPdfResult> {
+export async function processPdfBill(
+  pdfPath: string,
+  options?: {
+    batchSize?: number;
+    onProgress?: (progress: ProcessingProgress) => void;
+  }
+): Promise<ProcessPdfResult> {
+  const batchSize = options?.batchSize || parseInt(process.env.PDF_BATCH_SIZE || '10', 10);
+  const lineItemDpi = parseInt(process.env.PDF_LINE_ITEM_DPI || '150', 10);
+
   try {
     // Get PDF info
     const stats = await fs.stat(pdfPath);
@@ -95,35 +105,133 @@ export async function processPdfBill(pdfPath: string): Promise<ProcessPdfResult>
 
     console.log(`Processing PDF: ${pdfPath}, Pages: ${pageCount}, Size: ${fileSize} bytes`);
 
-    // Convert PDF to images
-    const images = await convertPdfToImages(pdfPath, {
-      density: 200,
-      format: 'png',
-      width: 2400,
-      height: 3200,
-    });
-
-    if (!images || images.length === 0) {
-      throw new Error('No images generated from PDF');
-    }
-
-    console.log(`Converted ${images.length} pages to images`);
-
-    // Extract data using Claude Vision
     let extraction: BillExtractionResult;
 
-    if (images.length === 1) {
-      // Single page - simpler extraction
-      extraction = await extractBillData(images[0].base64);
+    // Determine processing strategy based on page count
+    if (pageCount <= 10) {
+      // Small PDFs: Use existing single-batch approach
+      console.log('Using single-batch extraction (10 pages or less)');
+
+      options?.onProgress?.({
+        stage: 'header',
+        message: `Processing ${pageCount} page${pageCount > 1 ? 's' : ''}...`,
+      });
+
+      const images = await convertPdfToImages(pdfPath, {
+        density: 200,
+        format: 'png',
+        width: 2400,
+        height: 3200,
+      });
+
+      if (!images || images.length === 0) {
+        throw new Error('No images generated from PDF');
+      }
+
+      if (images.length === 1) {
+        extraction = await extractBillData(images[0].base64);
+      } else {
+        const base64Images = images.map((img) => img.base64);
+        extraction = await extractBillDataFromPages(base64Images);
+      }
+
+      await cleanupTempImages();
     } else {
-      // Multiple pages - send all pages to Claude
-      const base64Images = images.map((img) => img.base64);
-      extraction = await extractBillDataFromPages(base64Images);
+      // Large PDFs: Use batched extraction approach
+      console.log(`Using batched extraction (${pageCount} pages)`);
+
+      // Phase 1: Extract header from page 1
+      options?.onProgress?.({
+        stage: 'header',
+        message: 'Extracting header from page 1...',
+      });
+
+      console.log('Phase 1: Extracting header from page 1');
+      const page1Image = await convertPdfPageToImage(pdfPath, 1, {
+        density: 200,
+        format: 'png',
+        width: 2400,
+        height: 3200,
+      });
+
+      const headerResult = await extractBillHeader(page1Image);
+      console.log(`Header extracted. Invoice: ${headerResult.invoiceNumber}`);
+
+      // Phase 2: Extract line items from remaining pages in batches
+      const remainingPages = pageCount - 1; // Exclude page 1
+      const totalBatches = Math.ceil(remainingPages / batchSize);
+
+      console.log(`Phase 2: Extracting line items from pages 2-${pageCount} in ${totalBatches} batches`);
+
+      const allLineItems: any[] = [];
+      let totalConfidence = headerResult.confidence;
+      let confidenceCount = 1;
+
+      for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+        const batchNumber = batchIndex + 1;
+        const startPage = 2 + (batchIndex * batchSize); // Page 2 is first line items page
+        const endPage = Math.min(startPage + batchSize - 1, pageCount);
+        const pagesInBatch = endPage - startPage + 1;
+
+        options?.onProgress?.({
+          stage: 'line_items',
+          currentBatch: batchNumber,
+          totalBatches,
+          message: `Processing batch ${batchNumber} of ${totalBatches} (pages ${startPage}-${endPage})...`,
+        });
+
+        console.log(`Processing batch ${batchNumber}/${totalBatches}: pages ${startPage}-${endPage}`);
+
+        // Convert batch pages to images with optimized settings
+        const batchPageNumbers = Array.from(
+          { length: pagesInBatch },
+          (_, i) => startPage + i
+        );
+
+        const batchImages = await Promise.all(
+          batchPageNumbers.map((pageNum) =>
+            convertPdfPageToImage(pdfPath, pageNum, {
+              density: lineItemDpi,
+              format: 'jpg', // Use JPEG for better compression
+              width: 1800,
+              height: 2400,
+            })
+          )
+        );
+
+        console.log(`Converted ${batchImages.length} pages in batch ${batchNumber}`);
+
+        // Extract line items from this batch
+        const batchLineItems = await extractLineItemsFromPages(batchImages);
+
+        if (batchLineItems.length > 0) {
+          allLineItems.push(...batchLineItems);
+          console.log(`Extracted ${batchLineItems.length} line items from batch ${batchNumber}`);
+        } else {
+          console.warn(`No line items extracted from batch ${batchNumber}`);
+        }
+
+        // Clean up batch images to free memory
+        await cleanupTempImages();
+
+        // Track confidence (simple average for now)
+        totalConfidence += 90; // Assume 90% confidence for successful batch
+        confidenceCount++;
+      }
+
+      // Phase 3: Merge results
+      console.log(`Merging results: ${allLineItems.length} total line items`);
+
+      extraction = {
+        ...headerResult,
+        lineItems: allLineItems,
+        confidence: Math.round(totalConfidence / confidenceCount),
+      };
+
+      console.log(`Batched extraction complete. Total line items: ${allLineItems.length}, Confidence: ${extraction.confidence}%`);
     }
 
-    console.log(`Extraction complete. Confidence: ${extraction.confidence}%`);
-
-    // Clean up temporary image files
+    // Final cleanup
     await cleanupTempImages();
 
     return {

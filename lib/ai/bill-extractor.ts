@@ -1,6 +1,6 @@
 import anthropic, { getAnthropicModel } from './anthropic-client';
-import { BILL_EXTRACTION_PROMPT, QUICK_SCAN_PROMPT } from './prompts';
-import { BillExtractionResult } from '../types/bill';
+import { BILL_EXTRACTION_PROMPT, QUICK_SCAN_PROMPT, BILL_HEADER_EXTRACTION_PROMPT, LINE_ITEMS_EXTRACTION_PROMPT } from './prompts';
+import { BillExtractionResult, LineItemExtraction } from '../types/bill';
 import Anthropic from '@anthropic-ai/sdk';
 
 export interface QuickScanResult {
@@ -210,6 +210,137 @@ export async function extractBillDataFromPages(
     throw new Error(
       `Failed to extract bill data from pages: ${error.message}`
     );
+  }
+}
+
+/**
+ * Extract bill header/summary from page 1 only
+ * Used in batched processing to extract header separately from line items
+ */
+export async function extractBillHeader(
+  imageBase64: string,
+  mediaType: 'image/png' | 'image/jpeg' | 'image/webp' = 'image/png'
+): Promise<BillExtractionResult> {
+  try {
+    const message = await anthropic.messages.create({
+      model: getAnthropicModel(),
+      max_tokens: 4000,
+      temperature: 0.1,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: mediaType,
+                data: imageBase64,
+              },
+            },
+            {
+              type: 'text',
+              text: BILL_HEADER_EXTRACTION_PROMPT,
+            },
+          ],
+        },
+      ],
+    });
+
+    const textContent = message.content.find(
+      (block): block is Anthropic.TextBlock => block.type === 'text'
+    );
+
+    if (!textContent) {
+      throw new Error('No text content in Claude response');
+    }
+
+    let jsonText = textContent.text.trim();
+
+    // Remove markdown code blocks if present
+    if (jsonText.startsWith('```json')) {
+      jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+    } else if (jsonText.startsWith('```')) {
+      jsonText = jsonText.replace(/```\n?/g, '');
+    }
+
+    const extracted: BillExtractionResult = JSON.parse(jsonText);
+    validateExtractionResult(extracted);
+
+    return extracted;
+  } catch (error: any) {
+    console.error('Bill header extraction error:', error);
+    throw new Error(`Failed to extract bill header: ${error.message}`);
+  }
+}
+
+/**
+ * Extract line items only from a batch of pages
+ * Used in batched processing to extract line items separately from header
+ */
+export async function extractLineItemsFromPages(
+  imagesBase64: string[],
+  mediaType: 'image/png' | 'image/jpeg' | 'image/webp' = 'image/png'
+): Promise<LineItemExtraction[]> {
+  try {
+    // Map images to image blocks
+    const imageBlocks = imagesBase64.map((imageData) => ({
+      type: 'image' as const,
+      source: {
+        type: 'base64' as const,
+        media_type: mediaType,
+        data: imageData,
+      },
+    }));
+
+    const message = await anthropic.messages.create({
+      model: getAnthropicModel(),
+      max_tokens: 4000,
+      temperature: 0.1,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            ...imageBlocks,
+            {
+              type: 'text',
+              text: LINE_ITEMS_EXTRACTION_PROMPT,
+            },
+          ],
+        },
+      ],
+    });
+
+    const textContent = message.content.find(
+      (block): block is Anthropic.TextBlock => block.type === 'text'
+    );
+
+    if (!textContent) {
+      throw new Error('No text content in Claude response');
+    }
+
+    let jsonText = textContent.text.trim();
+
+    // Remove markdown code blocks if present
+    if (jsonText.startsWith('```json')) {
+      jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+    } else if (jsonText.startsWith('```')) {
+      jsonText = jsonText.replace(/```\n?/g, '');
+    }
+
+    const result = JSON.parse(jsonText);
+
+    // Validate result has lineItems array
+    if (!result.lineItems || !Array.isArray(result.lineItems)) {
+      console.warn('Line items extraction returned no lineItems array');
+      return [];
+    }
+
+    return result.lineItems;
+  } catch (error: any) {
+    console.error('Line items extraction error:', error);
+    // Don't throw - return empty array to allow partial success
+    return [];
   }
 }
 

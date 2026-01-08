@@ -76,3 +76,16 @@ export interface BillComparison {
   newLineItems: string[];
   removedLineItems: string[];
 }
+
+export interface ProcessingProgress {
+  stage: 'header' | 'line_items';
+  currentBatch?: number;
+  totalBatches?: number;
+  message: string;
+}
+
+export interface LineItemsBatchResult {
+  lineItems: LineItemExtraction[];
+  confidence: number;
+  batchNumber: number;
+}

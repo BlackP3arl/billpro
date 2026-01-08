@@ -70,3 +70,67 @@ Return ONLY valid JSON - no markdown, no explanations:
 }
 
 Focus only on finding these two fields. Ignore all other information.`;
+
+export const BILL_HEADER_EXTRACTION_PROMPT = `Analyze the FIRST PAGE of this ISP/telecom bill and extract ONLY the header/summary information.
+
+IMPORTANT INSTRUCTIONS:
+1. Extract ONLY header information - do NOT extract line items
+2. All monetary amounts should be numbers (not strings)
+3. All dates should be in YYYY-MM-DD format
+4. Return ONLY valid JSON - no markdown, no explanations
+
+Required JSON structure:
+{
+  "accountNumber": "string - unique account/service number",
+  "invoiceNumber": "string - bill invoice number",
+  "billingPeriodStart": "YYYY-MM-DD",
+  "billingPeriodEnd": "YYYY-MM-DD",
+  "billDate": "YYYY-MM-DD",
+  "dueDate": "YYYY-MM-DD or null",
+  "currentCharges": number,
+  "outstanding": number,
+  "totalDue": number,
+  "gstAmount": number,
+  "lineItems": [],
+  "confidence": number (0-100, your confidence in the extraction accuracy)
+}
+
+CRITICAL:
+- Leave lineItems as empty array []
+- Be precise with numbers - use exact amounts from the bill
+- If a field is not clearly visible, use null or 0 as appropriate
+- Your confidence score should reflect extraction certainty`;
+
+export const LINE_ITEMS_EXTRACTION_PROMPT = `Analyze these pages from an ISP/telecom bill and extract ONLY the line items (service numbers and charges).
+
+IMPORTANT INSTRUCTIONS:
+1. Extract EVERY line item visible on these pages
+2. Each line item represents a service/phone number with its charges
+3. All monetary amounts should be numbers (not strings)
+4. All dates should be in YYYY-MM-DD format
+5. Return ONLY valid JSON - no markdown, no explanations
+
+Required JSON structure:
+{
+  "lineItems": [
+    {
+      "serviceNumber": "string - phone/SIM number",
+      "packageName": "string - subscription package name",
+      "subscriptionCharge": number,
+      "usageCharges": number,
+      "totalCharge": number,
+      "servicePeriodStart": "YYYY-MM-DD or null",
+      "servicePeriodEnd": "YYYY-MM-DD or null",
+      "usageDetails": {
+        // Optional: voice minutes, data GB, SMS count, etc.
+      }
+    }
+  ],
+  "confidence": number (0-100, your confidence in the extraction accuracy)
+}
+
+CRITICAL:
+- Extract ALL line items from these pages (every phone number/service)
+- Be precise with numbers - use exact amounts from the bill
+- If a field is not clearly visible for a line item, use null or 0 as appropriate
+- Your confidence score should reflect extraction certainty`;
