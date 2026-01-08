@@ -38,6 +38,16 @@ export default function ServiceNumbersPage() {
   const [searchDivisionName, setSearchDivisionName] = useState('');
   const [filterActive, setFilterActive] = useState<string>('all'); // 'all', 'active', 'inactive'
 
+  // Edit modal states
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingService, setEditingService] = useState<ServiceNumber | null>(null);
+  const [editForm, setEditForm] = useState({
+    package_name: '',
+    division_name: '',
+    is_active: true,
+    notes: '',
+  });
+
   useEffect(() => {
     fetchServiceNumbers();
   }, []);
@@ -111,6 +121,51 @@ export default function ServiceNumbersPage() {
     setSearchPackageName('');
     setSearchDivisionName('');
     setFilterActive('all');
+  };
+
+  const openEditModal = (service: ServiceNumber) => {
+    setEditingService(service);
+    setEditForm({
+      package_name: service.package_name || '',
+      division_name: service.division_name || '',
+      is_active: service.is_active,
+      notes: service.notes || '',
+    });
+    setEditModalOpen(true);
+  };
+
+  const closeEditModal = () => {
+    setEditModalOpen(false);
+    setEditingService(null);
+  };
+
+  const handleUpdateService = async () => {
+    if (!editingService) return;
+
+    try {
+      const res = await fetch('/api/service-numbers', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingService.id,
+          ...editForm,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        // Update the local state
+        setServiceNumbers(prev =>
+          prev.map(sn => sn.id === editingService.id ? { ...sn, ...editForm } : sn)
+        );
+        closeEditModal();
+      } else {
+        alert('Failed to update service number: ' + data.error);
+      }
+    } catch (err: any) {
+      alert('Error updating service number: ' + err.message);
+    }
   };
 
   if (loading) {
@@ -278,6 +333,7 @@ export default function ServiceNumbersPage() {
                     <th className="text-left p-3 font-semibold">First Seen</th>
                     <th className="text-left p-3 font-semibold">Last Seen</th>
                     <th className="text-left p-3 font-semibold">Status</th>
+                    <th className="text-left p-3 font-semibold">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -345,6 +401,28 @@ export default function ServiceNumbersPage() {
                           </span>
                         )}
                       </td>
+                      <td className="p-3">
+                        <button
+                          onClick={() => openEditModal(sn)}
+                          className="text-primary hover:text-primary/80 transition-colors"
+                          title="Edit service number"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="18"
+                            height="18"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                            <path d="m15 5 4 4" />
+                          </svg>
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -359,6 +437,95 @@ export default function ServiceNumbersPage() {
           Back to Home
         </Button>
       </div>
+
+      {/* Edit Modal */}
+      {editModalOpen && editingService && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <Card className="w-full max-w-lg mx-4">
+            <CardHeader>
+              <CardTitle>Edit Service Number</CardTitle>
+              <CardDescription>
+                Update details for {editingService.service_number}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium mb-2 block">
+                    Package Name
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.package_name}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, package_name: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border rounded-md bg-background"
+                    placeholder="Enter package name"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium mb-2 block">
+                    Division Name
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.division_name}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, division_name: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border rounded-md bg-background"
+                    placeholder="Enter division name"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Status</label>
+                  <div className="flex gap-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        checked={editForm.is_active}
+                        onChange={() => setEditForm({ ...editForm, is_active: true })}
+                        className="w-4 h-4"
+                      />
+                      <span className="text-sm">Active</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        checked={!editForm.is_active}
+                        onChange={() => setEditForm({ ...editForm, is_active: false })}
+                        className="w-4 h-4"
+                      />
+                      <span className="text-sm">Inactive</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Notes</label>
+                  <textarea
+                    value={editForm.notes}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, notes: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border rounded-md bg-background min-h-[100px]"
+                    placeholder="Add notes about this service number"
+                  />
+                </div>
+              </div>
+            </CardContent>
+            <div className="flex items-center justify-end gap-3 p-6 pt-0">
+              <Button variant="outline" onClick={closeEditModal}>
+                Cancel
+              </Button>
+              <Button onClick={handleUpdateService}>Save Changes</Button>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
     </>
   );

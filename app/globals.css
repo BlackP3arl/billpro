@@ -4,48 +4,60 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Premium Fintech Light Mode */
+    --background: 0 0% 98%;
+    --foreground: 220 20% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 220 20% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
+    --popover-foreground: 220 20% 12%;
+    --primary: 38 92% 55%;
+    --primary-foreground: 220 20% 12%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 20% 12%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 10% 46%;
+    --accent: 38 92% 55%;
+    --accent-foreground: 220 20% 12%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 38 92% 55%;
+    --radius: 1rem;
+
+    /* Glassmorphism variables */
+    --glass-bg: rgba(255, 255, 255, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.18);
+    --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    /* Premium Fintech Dark Mode - Near-black background with gold accent */
+    --background: 220 26% 5%;
+    --foreground: 0 0% 98%;
+    --card: 220 20% 8%;
+    --card-foreground: 0 0% 98%;
+    --popover: 220 20% 8%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 38 92% 55%;
+    --primary-foreground: 220 20% 12%;
+    --secondary: 220 16% 12%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 220 16% 12%;
+    --muted-foreground: 220 10% 60%;
+    --accent: 38 92% 55%;
+    --accent-foreground: 220 20% 12%;
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 16% 18%;
+    --input: 220 16% 12%;
+    --ring: 38 92% 55%;
+
+    /* Glassmorphism variables for dark mode */
+    --glass-bg: rgba(17, 20, 28, 0.6);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
   }
 }
 
@@ -53,7 +65,89 @@
   * {
     @apply border-border;
   }
+
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    background-image:
+      radial-gradient(at 0% 0%, hsl(220, 26%, 8%) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, hsl(38, 92%, 10%) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, hsl(220, 26%, 8%) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, hsl(220, 26%, 6%) 0px, transparent 50%);
+    background-attachment: fixed;
+  }
+
+  .dark body {
+    background-color: hsl(var(--background));
+    background-image:
+      radial-gradient(at 0% 0%, hsl(220, 26%, 10%) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, hsl(38, 92%, 8%) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, hsl(220, 26%, 10%) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, hsl(220, 26%, 6%) 0px, transparent 50%);
+  }
+}
+
+@layer utilities {
+  /* Glassmorphism utilities */
+  .glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid var(--glass-border);
+  }
+
+  .glass-card {
+    @apply glass rounded-2xl;
+    box-shadow: var(--glass-shadow);
+  }
+
+  .glass-intense {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(20px) saturate(200%);
+    -webkit-backdrop-filter: blur(20px) saturate(200%);
+  }
+
+  .dark .glass-intense {
+    background: rgba(17, 20, 28, 0.75);
+  }
+
+  /* Premium shadows */
+  .shadow-premium {
+    box-shadow: 0 4px 24px -4px rgba(245, 166, 35, 0.12),
+                0 2px 8px -2px rgba(0, 0, 0, 0.08);
+  }
+
+  .shadow-premium-lg {
+    box-shadow: 0 8px 32px -8px rgba(245, 166, 35, 0.2),
+                0 4px 16px -4px rgba(0, 0, 0, 0.12);
+  }
+
+  .shadow-soft {
+    box-shadow: 0 2px 16px -4px rgba(0, 0, 0, 0.08),
+                0 1px 4px -1px rgba(0, 0, 0, 0.04);
+  }
+
+  /* Text hierarchy */
+  .text-hierarchy-1 {
+    @apply text-foreground font-semibold;
+  }
+
+  .text-hierarchy-2 {
+    @apply text-foreground/90 font-medium;
+  }
+
+  .text-hierarchy-3 {
+    @apply text-muted-foreground;
+  }
+
+  /* Gold gradient */
+  .gold-gradient {
+    background: linear-gradient(135deg, #F5A623 0%, #F7B955 100%);
+  }
+
+  .gold-gradient-text {
+    background: linear-gradient(135deg, #F5A623 0%, #F7B955 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 }

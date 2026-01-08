@@ -139,17 +139,6 @@ export default function Home() {
                 </div>
               </div>
             </div>
-
-            <div className="rounded-lg border bg-card p-6">
-              <h2 className="text-lg font-semibold mb-4">Setup Instructions</h2>
-              <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
-                <li>Set up PostgreSQL database and run the schema.sql file</li>
-                <li>Copy .env.example to .env.local and add your Anthropic API key</li>
-                <li>Install dependencies: npm install</li>
-                <li>Run database migrations (see lib/db/schema.sql)</li>
-                <li>Start the development server: npm run dev</li>
-              </ol>
-            </div>
           </div>
         </main>
 

@@ -3,11 +3,11 @@ import { Button } from '@/components/ui/button';
 
 export function Header() {
   return (
-    <header className="border-b bg-background sticky top-0 z-50">
-      <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-          <div className="text-2xl font-bold text-primary">BillPro</div>
-          <span className="text-sm text-muted-foreground hidden sm:inline">
+    <header className="glass border-b border-border/50 sticky top-0 z-50 shadow-soft">
+      <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-all duration-200 group">
+          <div className="text-2xl font-bold gold-gradient-text">BillPro</div>
+          <span className="text-sm text-hierarchy-3 hidden sm:inline group-hover:text-hierarchy-2 transition-colors">
             ISP Bill Management
           </span>
         </Link>

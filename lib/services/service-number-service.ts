@@ -169,6 +169,66 @@ export async function addServiceNumberNotes(
 }
 
 /**
+ * Update service number details
+ */
+export async function updateServiceNumber(
+  id: string,
+  updates: {
+    package_name?: string | null;
+    division_name?: string | null;
+    is_active?: boolean;
+    notes?: string | null;
+  }
+): Promise<ServiceNumber> {
+  const fields: string[] = [];
+  const values: any[] = [];
+  let paramIndex = 1;
+
+  if (updates.package_name !== undefined) {
+    fields.push(`package_name = $${paramIndex}`);
+    values.push(updates.package_name);
+    paramIndex++;
+  }
+
+  if (updates.division_name !== undefined) {
+    fields.push(`division_name = $${paramIndex}`);
+    values.push(updates.division_name);
+    paramIndex++;
+  }
+
+  if (updates.is_active !== undefined) {
+    fields.push(`is_active = $${paramIndex}`);
+    values.push(updates.is_active);
+    paramIndex++;
+  }
+
+  if (updates.notes !== undefined) {
+    fields.push(`notes = $${paramIndex}`);
+    values.push(updates.notes);
+    paramIndex++;
+  }
+
+  // Always update the timestamp
+  fields.push(`updated_at = CURRENT_TIMESTAMP`);
+
+  // Add the ID as the last parameter
+  values.push(id);
+
+  const sql = `UPDATE service_numbers SET ${fields.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
+
+  console.log('SQL Query:', sql);
+  console.log('Values:', values);
+
+  const result = await query<ServiceNumber>(sql, values);
+
+  if (!result.rows[0]) {
+    throw new Error(`Service number with ID ${id} not found`);
+  }
+
+  return result.rows[0];
+}
+
+/**
  * Get all service numbers (with stats)
  */
 export async function getAllServiceNumbers() {
