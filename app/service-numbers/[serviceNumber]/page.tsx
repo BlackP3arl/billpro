@@ -45,6 +45,7 @@ export default function ServiceNumberDetailPage() {
   const [monthlyCharges, setMonthlyCharges] = useState<MonthlyCharge[]>([]);
   const [totals, setTotals] = useState<Totals | null>(null);
   const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,11 +53,18 @@ export default function ServiceNumberDetailPage() {
     fetchServiceNumberDetails();
   }, [serviceNumber]);
 
+  // Refetch monthly data when year changes
+  useEffect(() => {
+    if (!loading) {
+      fetchMonthlyTotals();
+    }
+  }, [selectedYear]);
+
   const fetchServiceNumberDetails = async () => {
     try {
       const [detailsRes, monthlyTotalsRes] = await Promise.all([
         fetch(`/api/service-numbers/${serviceNumber}`),
-        fetch(`/api/service-numbers/${serviceNumber}/monthly-totals?year=${new Date().getFullYear()}`),
+        fetch(`/api/service-numbers/${serviceNumber}/monthly-totals?year=${selectedYear}`),
       ]);
 
       const detailsData = await detailsRes.json();
@@ -76,6 +84,18 @@ export default function ServiceNumberDetailPage() {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchMonthlyTotals = async () => {
+    try {
+      const res = await fetch(`/api/service-numbers/${serviceNumber}/monthly-totals?year=${selectedYear}`);
+      const data = await res.json();
+      if (data.success) {
+        setMonthlyData(data.data);
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch monthly totals:', err);
     }
   };
 
@@ -118,15 +138,36 @@ export default function ServiceNumberDetailPage() {
         >
           ← Back to Service Numbers
         </Button>
-        <h1 className="text-3xl font-bold">Service Number Details</h1>
-        <p className="text-xl font-mono text-muted-foreground">{serviceNumber}</p>
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-bold">Service Number Details</h1>
+            <p className="text-xl font-mono text-muted-foreground">{serviceNumber}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <label htmlFor="year-select" className="text-sm font-medium">
+              Chart Year:
+            </label>
+            <select
+              id="year-select"
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+              className="px-3 py-1.5 border rounded-md bg-background text-sm"
+            >
+              {[2024, 2025, 2026].map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
       </div>
 
       {/* Monthly Trend Chart */}
       {monthlyData.length > 0 && monthlyData.some((m) => m.total > 0) && (
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Monthly Trend Analysis ({new Date().getFullYear()})</CardTitle>
+            <CardTitle>Monthly Trend Analysis ({selectedYear})</CardTitle>
             <CardDescription>
               Total charges per month for this service number
             </CardDescription>

@@ -22,6 +22,8 @@ export default function AccountsPage() {
   const [editMode, setEditMode] = useState(false);
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [monthlyData, setMonthlyData] = useState<Record<string, MonthlyData[]>>({});
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [searchQuery, setSearchQuery] = useState('');
   const [formData, setFormData] = useState({
     account_number: '',
     account_name: '',
@@ -60,6 +62,13 @@ export default function AccountsPage() {
     }
   }, [editMode, editingAccountId]);
 
+  // Refetch monthly data when year changes
+  useEffect(() => {
+    if (accounts.length > 0) {
+      fetchMonthlyDataForAccounts(accounts, selectedYear);
+    }
+  }, [selectedYear]);
+
   const fetchAccounts = async () => {
     try {
       const res = await fetch('/api/accounts?stats=true');
@@ -79,14 +88,14 @@ export default function AccountsPage() {
     }
   };
 
-  const fetchMonthlyDataForAccounts = async (accountsList: any[]) => {
-    const currentYear = new Date().getFullYear();
+  const fetchMonthlyDataForAccounts = async (accountsList: any[], year?: number) => {
+    const targetYear = year !== undefined ? year : selectedYear;
     const dataMap: Record<string, MonthlyData[]> = {};
 
     // Fetch monthly data for all accounts in parallel
     const promises = accountsList.map(async (account) => {
       try {
-        const res = await fetch(`/api/accounts/${account.id}/monthly-totals?year=${currentYear}`);
+        const res = await fetch(`/api/accounts/${account.id}/monthly-totals?year=${targetYear}`);
         const data = await res.json();
         if (data.success) {
           dataMap[account.id] = data.data;
@@ -210,6 +219,18 @@ export default function AccountsPage() {
     }
   };
 
+  // Filter accounts based on search query
+  const filteredAccounts = accounts.filter((account) => {
+    if (!searchQuery.trim()) return true;
+
+    const query = searchQuery.toLowerCase();
+    return (
+      account.account_number?.toLowerCase().includes(query) ||
+      account.account_name?.toLowerCase().includes(query) ||
+      account.provider?.toLowerCase().includes(query)
+    );
+  });
+
   if (loading) {
     return (
       <>
@@ -233,6 +254,23 @@ export default function AccountsPage() {
           </p>
         </div>
         <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <label htmlFor="year-select" className="text-sm font-medium">
+              Chart Year:
+            </label>
+            <select
+              id="year-select"
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+              className="px-3 py-1.5 border rounded-md bg-background text-sm"
+            >
+              {[2024, 2025, 2026].map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="flex items-center gap-2">
             <label htmlFor="edit-mode-toggle" className="text-sm font-medium cursor-pointer">
               Edit Mode
@@ -265,6 +303,47 @@ export default function AccountsPage() {
           {error}
         </div>
       )}
+
+      {/* Search Input */}
+      <div className="mb-6">
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Search accounts by number, name, or provider..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full px-4 py-2.5 pl-10 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+          <svg
+            className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+        {searchQuery && (
+          <p className="text-sm text-muted-foreground mt-2">
+            Found {filteredAccounts.length} account{filteredAccounts.length !== 1 ? 's' : ''}
+          </p>
+        )}
+      </div>
 
       {showForm && (
         <Card className="mb-6">
@@ -352,9 +431,20 @@ export default function AccountsPage() {
             <Button onClick={() => setShowForm(true)}>Add Your First Account</Button>
           </CardContent>
         </Card>
+      ) : filteredAccounts.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="text-muted-foreground mb-4">
+              No accounts match your search query "{searchQuery}"
+            </p>
+            <Button onClick={() => setSearchQuery('')} variant="outline">
+              Clear Search
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
-          {accounts.map((account) => (
+          {filteredAccounts.map((account) => (
             <Card key={account.id}>
               <CardContent className="p-6">
                 <div className="space-y-3">
@@ -536,7 +626,7 @@ export default function AccountsPage() {
                   {monthlyData[account.id] && monthlyData[account.id].some((m) => m.total > 0) && (
                     <div className="pt-4 border-t">
                       <p className="text-xs text-muted-foreground mb-2">
-                        Monthly Trend ({new Date().getFullYear()})
+                        Monthly Trend ({selectedYear})
                       </p>
                       <div className="h-32 w-full">
                         <ResponsiveContainer width="100%" height="100%">
