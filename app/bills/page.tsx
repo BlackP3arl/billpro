@@ -247,7 +247,16 @@ export default function BillsPage() {
                           <div>
                             <p className="font-medium">{bill.account_name || bill.account_number}</p>
                             <p className="text-xs text-muted-foreground font-mono">
-                              {bill.account_number}
+                              {bill.account_number ? (
+                                <Link
+                                  href={`/accounts?account=${encodeURIComponent(bill.account_number)}`}
+                                  className="hover:underline text-primary"
+                                >
+                                  {bill.account_number}
+                                </Link>
+                              ) : (
+                                '-'
+                              )}
                             </p>
                           </div>
                         </td>

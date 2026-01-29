@@ -47,6 +47,12 @@ export default function AccountsPage() {
       setFormData((prev) => ({ ...prev, account_number: registerAccount }));
       setShowForm(true);
     }
+
+    // Apply account filter from bills list
+    const accountFilter = searchParams.get('account');
+    if (accountFilter) {
+      setSearchQuery(accountFilter);
+    }
   }, [searchParams]);
 
   // Cancel any active edits when edit mode is disabled
