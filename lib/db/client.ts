@@ -1,4 +1,4 @@
-import { Pool, QueryResult, QueryResultRow } from 'pg';
+import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
 
 // Create a connection pool
 const pool = new Pool({
@@ -33,7 +33,7 @@ export const query = async <T extends QueryResultRow = any>(
 
 // Transaction helper
 export const transaction = async <T>(
-  callback: (client: any) => Promise<T>
+  callback: (client: PoolClient) => Promise<T>
 ): Promise<T> => {
   const client = await pool.connect();
   try {

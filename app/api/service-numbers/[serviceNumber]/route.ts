@@ -3,10 +3,10 @@ import { getMonthlyChargesForServiceNumber, getTotalChargesForServiceNumber } fr
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { serviceNumber: string } }
+  { params }: { params: Promise<{ serviceNumber: string }> }
 ) {
   try {
-    const serviceNumber = params.serviceNumber;
+    const { serviceNumber } = await params;
 
     // Get monthly charge history
     const monthlyCharges = await getMonthlyChargesForServiceNumber(serviceNumber);

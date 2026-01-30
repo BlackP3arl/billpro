@@ -3,10 +3,10 @@ import { getServiceNumberMonthlyTotals } from '@/lib/services/monthly-charge-ser
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { serviceNumber: string } }
+  { params }: { params: Promise<{ serviceNumber: string }> }
 ) {
   try {
-    const { serviceNumber } = params;
+    const { serviceNumber } = await params;
     const { searchParams } = new URL(request.url);
     const year = parseInt(searchParams.get('year') || new Date().getFullYear().toString(), 10);
 

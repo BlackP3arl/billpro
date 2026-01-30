@@ -125,7 +125,7 @@ export async function detectNewServiceNumbers(
 /**
  * Get new service numbers (not seen before)
  */
-export async function getNewServiceNumbers(
+export function getNewServiceNumbers(
   detections: NewServiceDetection[]
 ): NewServiceDetection[] {
   return detections.filter((d) => d.isNew);

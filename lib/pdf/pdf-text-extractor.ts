@@ -1,5 +1,4 @@
 import fs from 'fs/promises';
-import pdfParse from 'pdf-parse';
 
 export interface ExtractedNumbers {
   invoiceNumber?: string;
@@ -16,6 +15,10 @@ export async function extractNumbersFromPdfFirstPage(
 ): Promise<ExtractedNumbers> {
   try {
     const pdfBuffer = await fs.readFile(pdfPath);
+    const pdfParseModule = await import('pdf-parse');
+    const pdfParse =
+      (pdfParseModule as { default?: (input: Buffer) => Promise<{ text?: string }> }).default ??
+      (pdfParseModule as unknown as (input: Buffer) => Promise<{ text?: string }>);
     const data = await pdfParse(pdfBuffer);
     
     // Get text content (first 3000 chars should contain header with invoice/account info)

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Header } from '@/components/header';
@@ -14,7 +14,7 @@ interface MonthlyData {
   total: number;
 }
 
-export default function AccountsPage() {
+function AccountsPageContent() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -687,5 +687,22 @@ export default function AccountsPage() {
       </div>
     </div>
     </>
+  );
+}
+
+export default function AccountsPage() {
+  return (
+    <Suspense
+      fallback={
+        <>
+          <Header />
+          <div className="container mx-auto px-4 py-8">
+            <p>Loading accounts...</p>
+          </div>
+        </>
+      }
+    >
+      <AccountsPageContent />
+    </Suspense>
   );
 }

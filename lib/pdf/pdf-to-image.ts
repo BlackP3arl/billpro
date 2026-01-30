@@ -13,7 +13,6 @@ export interface PdfToImageOptions {
 export interface ConversionResult {
   page: number;
   base64: string;
-  path?: string;
 }
 
 /**
@@ -54,7 +53,6 @@ export async function convertPdfToImages(
     return result.map((page, index) => ({
       page: index + 1,
       base64: page.base64 || '',
-      path: page.path,
     }));
   } catch (error: any) {
     console.error('PDF to image conversion error:', error);
